@@ -1,0 +1,277 @@
+/* mde — constrained markdown editor. Everything is scoped under .mde and themed with --mde-* variables. */
+.mde {
+  --mde-bg: #ffffff;
+  --mde-fg: #1f2328;
+  --mde-muted: #6b7280;
+  --mde-border: #d0d7de;
+  --mde-toolbar-bg: #f6f8fa;
+  --mde-accent: #2563eb;
+  --mde-accent-soft: #dbeafe;
+  --mde-danger: #b91c1c;
+  --mde-radius: 8px;
+  --mde-font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mde-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --mde-min-height: 16rem;
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--mde-bg);
+  color: var(--mde-fg);
+  border: 1px solid var(--mde-border);
+  border-radius: var(--mde-radius);
+  font-family: var(--mde-font);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+/* ---- Toolbar ---------------------------------------------------------- */
+.mde-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--mde-border);
+  background: var(--mde-toolbar-bg);
+  border-radius: var(--mde-radius) var(--mde-radius) 0 0;
+}
+.mde-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+.mde-toolbar-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--mde-border);
+}
+.mde-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mde-fg);
+  font: 600 13px/1 var(--mde-font);
+  cursor: pointer;
+}
+.mde-tool:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+}
+.mde-tool.is-active {
+  background: var(--mde-accent-soft);
+  color: var(--mde-accent);
+  border-color: transparent;
+}
+.mde-tool:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.mde-tool:focus-visible,
+.mde-mode:focus-visible {
+  outline: 2px solid var(--mde-accent);
+  outline-offset: 1px;
+}
+.mde-modes {
+  display: inline-flex;
+  margin-left: auto;
+  border: 1px solid var(--mde-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--mde-bg);
+}
+.mde-mode {
+  padding: 5px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--mde-muted);
+  font: 500 13px/1 var(--mde-font);
+  cursor: pointer;
+}
+.mde-mode + .mde-mode {
+  border-left: 1px solid var(--mde-border);
+}
+.mde-mode.is-active {
+  background: var(--mde-accent);
+  color: #fff;
+}
+
+/* ---- Popover ---------------------------------------------------------- */
+.mde-popover {
+  position: absolute;
+  z-index: 10;
+  top: 44px;
+  left: 8px;
+  min-width: 320px;
+  max-width: calc(100% - 16px);
+  padding: 12px;
+  border: 1px solid var(--mde-border);
+  border-radius: var(--mde-radius);
+  background: var(--mde-bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.mde-popover-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mde-popover-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+.mde-popover-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--mde-muted);
+}
+.mde-popover-field input {
+  padding: 6px 8px;
+  border: 1px solid var(--mde-border);
+  border-radius: 6px;
+  font: 14px var(--mde-font);
+  color: var(--mde-fg);
+  background: var(--mde-bg);
+}
+.mde-popover-field input:focus {
+  outline: 2px solid var(--mde-accent);
+  outline-offset: -1px;
+}
+.mde-popover-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.mde-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--mde-border);
+  border-radius: 6px;
+  background: var(--mde-bg);
+  color: var(--mde-fg);
+  font: 500 13px var(--mde-font);
+  cursor: pointer;
+}
+.mde-btn-primary {
+  background: var(--mde-accent);
+  border-color: var(--mde-accent);
+  color: #fff;
+}
+.mde-btn-danger {
+  margin-left: auto;
+  color: var(--mde-danger);
+}
+
+/* ---- Editing surfaces ------------------------------------------------- */
+.mde-rich,
+.mde-source,
+.mde-preview {
+  flex: 1;
+  min-height: var(--mde-min-height);
+}
+.mde-rich[hidden],
+.mde-source[hidden],
+.mde-preview[hidden] {
+  display: none;
+}
+.mde-source {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16px 20px;
+  border: 0;
+  border-radius: 0 0 var(--mde-radius) var(--mde-radius);
+  resize: vertical;
+  background: var(--mde-bg);
+  color: var(--mde-fg);
+  font: 14px/1.6 var(--mde-mono);
+  outline: none;
+}
+.mde-content {
+  padding: 16px 20px;
+  min-height: var(--mde-min-height);
+  box-sizing: border-box;
+}
+
+/* ProseMirror essentials */
+.mde .ProseMirror {
+  position: relative;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  outline: none;
+  -webkit-font-variant-ligatures: none;
+  font-variant-ligatures: none;
+}
+.mde .ProseMirror-hideselection *::selection {
+  background: transparent;
+}
+.mde .ProseMirror-hideselection {
+  caret-color: transparent;
+}
+.mde .ProseMirror-selectednode {
+  outline: 2px solid var(--mde-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.mde .ProseMirror-gapcursor {
+  display: none;
+  pointer-events: none;
+  position: relative;
+}
+.mde .ProseMirror-gapcursor:after {
+  content: "";
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 20px;
+  border-top: 1px solid var(--mde-fg);
+  animation: mde-blink 1.1s steps(2, start) infinite;
+}
+@keyframes mde-blink {
+  to {
+    visibility: hidden;
+  }
+}
+.mde .ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
+.mde-dropcursor {
+  background: var(--mde-accent);
+}
+.mde .mde-empty::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  color: var(--mde-muted);
+  pointer-events: none;
+}
+
+/* ---- Structural document rules ----------------------------------------
+   Typography (paragraph spacing, heading sizes, list indent, link color) is
+   intentionally left to the host page: style `.mde-content` there. Only what
+   the editor guarantees lives here: media is a centered, auto-sized block,
+   and indented paragraphs are pushed in by `--mde-indent` per level. */
+.mde-content p[data-indent] {
+  margin-left: calc(var(--mde-level, 1) * var(--mde-indent, 1.6em));
+}
+.mde-content figure.mde-image,
+.mde-content figure.mde-video {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+}
+.mde-content img,
+.mde-content video {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  height: auto;
+}
+.mde-content video {
+  width: min(100%, 720px);
+}

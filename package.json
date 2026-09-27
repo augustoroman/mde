@@ -1,0 +1,65 @@
+{
+  "name": "mde",
+  "version": "0.1.0",
+  "description": "A constrained, allow-listed WYSIWYG markdown editor built on ProseMirror.",
+  "type": "module",
+  "main": "./dist/mde.js",
+  "module": "./dist/mde.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/mde.js"
+    },
+    "./style.css": "./dist/mde.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "markdown-it": "^15.0.2",
+    "prosemirror-commands": "^1.7.2",
+    "prosemirror-dropcursor": "^1.8.4",
+    "prosemirror-gapcursor": "^1.4.1",
+    "prosemirror-history": "^1.5.0",
+    "prosemirror-inputrules": "^1.5.1",
+    "prosemirror-keymap": "^1.2.3",
+    "prosemirror-markdown": "^1.13.8",
+    "prosemirror-model": "^1.25.12",
+    "prosemirror-schema-list": "^1.5.1",
+    "prosemirror-state": "^1.4.4",
+    "prosemirror-transform": "^1.12.2",
+    "prosemirror-view": "^1.42.6"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/augustoroman/mde.git"
+  },
+  "homepage": "https://github.com/augustoroman/mde#readme",
+  "bugs": {
+    "url": "https://github.com/augustoroman/mde/issues"
+  },
+  "keywords": [
+    "markdown",
+    "editor",
+    "wysiwyg",
+    "prosemirror",
+    "rich-text"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ]
+}

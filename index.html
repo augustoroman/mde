@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>mde demo</title>
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; background: #f3f4f6; color: #1f2328; }
+      main { max-width: 860px; margin: 32px auto; padding: 0 16px; }
+      h1 { font-size: 20px; margin: 0 0 12px; }
+      .row { display: grid; grid-template-columns: 1fr; gap: 16px; }
+      pre { margin: 0; padding: 12px 16px; background: #0f172a; color: #e2e8f0; border-radius: 8px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; min-height: 4em; }
+      .label { font-size: 12px; color: #6b7280; margin: 0 0 6px; text-transform: uppercase; letter-spacing: .04em; }
+
+      /* Document typography lives in the host page, not the library.
+         Generous paragraph margins make "next paragraph" visibly different
+         from a long paragraph that merely wraps onto several lines. */
+      .mde-content { font-size: 16px; line-height: 1.5; --mde-indent: 1.6em; /* one indent level = the list padding, so indented paragraphs line up with list items */ }
+      .mde-content p { margin: 1.25em 0; }
+      .mde-content h1, .mde-content h2, .mde-content h3 { margin: 1.5em 0 0.6em; line-height: 1.25; }
+      .mde-content h1 { font-size: 1.8em; }
+      .mde-content h2 { font-size: 1.45em; }
+      .mde-content h3 { font-size: 1.2em; }
+      /* Lists are tighter than paragraphs: items sit close together. */
+      .mde-content ul, .mde-content ol { margin: 1em 0; padding-left: 1.6em; }
+      .mde-content li > p { margin: 0; } /* items hold a <p>; don't give it paragraph spacing */
+      .mde-content li > ul, .mde-content li > ol { margin: 0.15em 0 0; }
+      .mde-content li + li { margin-top: 0.15em; }
+      .mde-content figure { margin: 1.25em 0; }
+      .mde-content > :first-child { margin-top: 0; }
+      .mde-content > :last-child { margin-bottom: 0; }
+      .mde-content a { color: #2563eb; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>mde — constrained markdown editor</h1>
+      <div class="row">
+        <div id="editor"></div>
+        <div>
+          <p class="label">Live markdown output</p>
+          <pre id="output"></pre>
+        </div>
+      </div>
+    </main>
+    <script type="module" src="/demo/main.ts"></script>
+  </body>
+</html>
