@@ -45,6 +45,11 @@ export interface VideoChoice {
   poster?: string;
   caption?: string;
 }
+/** What a link picker hands back. `text` is used only when nothing is selected. */
+export interface LinkChoice {
+  href: string;
+  text?: string;
+}
 /** An existing image, as handed to `pickImage`. */
 export interface ImageState {
   src: string;
@@ -75,6 +80,12 @@ export interface EditorOptions {
   pickImage?: (current: ImageState | null) => Promise<ImageChoice | null | undefined>;
   /** Same for videos. */
   pickVideo?: (current: VideoState | null) => Promise<VideoChoice | null | undefined>;
+  /**
+   * Your own link dialog (search your own pages, say). Called from the toolbar
+   * and ⌘K with the link under the cursor (`href`) and the selected text, or
+   * `null` when there is neither. Replaces the built-in URL popover for links.
+   */
+  pickLink?: (current: { href: string; text: string } | null) => Promise<LinkChoice | null | undefined>;
   /**
    * Called for each image/video file pasted or dropped into the editor. Resolve
    * with where it ended up and it is inserted at the paste/drop position;
@@ -168,9 +179,21 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
 
   const openLinkPopover = (view: EditorView): boolean => {
     const href = currentLinkHref(view.state);
+    if (options.pickLink) {
+      const { from, to, empty } = view.state.selection;
+      const text = empty ? "" : view.state.doc.textBetween(from, to, " ");
+      const current = href || text ? { href: href ?? "", text } : null;
+      void options.pickLink(current).then((choice) => {
+        if (destroyed || !choice?.href) return;
+        setLink(schema, choice.href, choice.text)(view.state, view.dispatch);
+        view.focus();
+      });
+      return true;
+    }
     popover.open({
       title: href ? "Edit link" : "Insert link",
-      fields: [{ name: "href", label: "URL", value: href ?? "", placeholder: "https://", type: "url", required: true }],
+      // A plain text field: relative links like /2026/10/post/ are fine.
+      fields: [{ name: "href", label: "URL", value: href ?? "", placeholder: "https://… or /path", required: true }],
       submitLabel: href ? "Update" : "Insert",
       secondary: href ? { label: "Remove link", onClick: () => (removeLink(schema)(view.state, view.dispatch), view.focus()) } : undefined,
       onSubmit: ({ href: value }) => {

@@ -4,7 +4,7 @@ import { createMarkdownParser, parseMarkdown, serializeMarkdown } from "./markdo
 import { createSchema, schema, type HeadingLevel, type SchemaOptions } from "./schema";
 
 export { createEditor } from "./editor/editor";
-export type { EditorMode, EditorOptions, MarkdownEditor, ImageChoice, VideoChoice, ImageState, VideoState, UploadResult } from "./editor/editor";
+export type { EditorMode, EditorOptions, MarkdownEditor, ImageChoice, VideoChoice, LinkChoice, ImageState, VideoState, UploadResult } from "./editor/editor";
 export { createSchema, schema, clampHeadingLevel, headingLevelsOf, optionsOf, DEFAULT_HEADING_LEVELS } from "./schema";
 export type { HeadingLevel, SchemaOptions } from "./schema";
 export { createMarkdownParser, parseMarkdown, markdownSerializer, serializeMarkdown, VIDEO_LINE_RE } from "./markdown";

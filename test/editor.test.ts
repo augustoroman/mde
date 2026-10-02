@@ -803,6 +803,28 @@ describe("media hooks", () => {
     expect(editor.getMarkdown()).toBe("text\n\n![picked](/picked.png)");
   });
 
+  it("pickLink replaces the link popover; its text is used when nothing is selected", async () => {
+    const pickLink = vi.fn(async () => ({ href: "/2026/10/post/", text: "that post" }));
+    mount("see", { pickLink });
+    cursorAtEnd();
+    container.querySelector<HTMLButtonElement>('[data-tool="link"]')!.click();
+    expect(pickLink).toHaveBeenCalledWith(null);
+    await flush();
+    expect(editor.getMarkdown()).toBe("see[that post](/2026/10/post/)");
+  });
+
+  it("the link popover accepts a relative URL", () => {
+    mount("word");
+    editor.view.dispatch(editor.view.state.tr.setSelection(TextSelection.create(editor.view.state.doc, 1, 5)));
+    container.querySelector<HTMLButtonElement>('[data-tool="link"]')!.click();
+    const popover = container.querySelector<HTMLElement>(".mde-popover")!;
+    const input = popover.querySelector<HTMLInputElement>('input[name="href"]')!;
+    expect(input.type).toBe("text");
+    input.value = "/a/b.html";
+    popover.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true }));
+    expect(editor.getMarkdown()).toBe("[word](/a/b.html)");
+  });
+
   it("a cancelled picker inserts nothing", async () => {
     const pickVideo = vi.fn(async () => null);
     mount("text", { pickVideo });

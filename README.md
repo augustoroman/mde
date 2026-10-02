@@ -87,6 +87,11 @@ createEditor(el, {
     return asset ? { src: asset.url, alt: asset.alt, caption: asset.caption } : null; // null = cancelled
   },
   pickVideo: async (current) => { /* same shape with { src, poster, caption } */ },
+  pickLink: async (current) => {
+    // current is { href, text } for a link under the cursor or a selection, else null
+    const page = await openPagePicker();
+    return page ? { href: page.url, text: page.title } : null; // text is used when nothing is selected
+  },
   uploadFile: async (file) => {
     // called for every image/video file pasted or dropped into the editor
     const { url } = await api.upload(file);

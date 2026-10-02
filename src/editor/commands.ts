@@ -352,8 +352,11 @@ function linkRange(state: EditorState): { from: number; to: number } | null {
   return { from, to };
 }
 
-/** Apply a link to the selection, or insert the URL as linked text when the selection is empty. */
-export function setLink(schema: Schema, href: string): Command {
+/**
+ * Apply a link to the selection (or the link under the cursor). With nothing
+ * selected, insert `text` (default: the URL itself) as linked text.
+ */
+export function setLink(schema: Schema, href: string, text?: string): Command {
   return (state, dispatch) => {
     const link = schema.marks.link;
     const { empty, from, to } = state.selection;
@@ -362,7 +365,7 @@ export function setLink(schema: Schema, href: string): Command {
     if (range) {
       tr.removeMark(range.from, range.to, link).addMark(range.from, range.to, link.create({ href }));
     } else {
-      tr.replaceSelectionWith(schema.text(href, [link.create({ href })]), false);
+      tr.replaceSelectionWith(schema.text(text || href, [link.create({ href })]), false);
     }
     dispatch?.(tr.scrollIntoView());
     return true;
