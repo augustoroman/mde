@@ -87,6 +87,12 @@ createEditor(el, {
     return asset ? { src: asset.url, alt: asset.alt, caption: asset.caption } : null; // null = cancelled
   },
   pickVideo: async (current) => { /* same shape with { src, poster, caption } */ },
+  pickMedia: async () => {
+    // one "Insert media" button instead of image + video; resolve with
+    // { kind: "image", src, … } or { kind: "video", src, … }, or insert yourself and resolve null
+    const asset = await openMediaBrowser();
+    return asset ? { kind: asset.kind, src: asset.url } : null;
+  },
   pickLink: async (current) => {
     // current is { href, text } for a link under the cursor or a selection, else null
     const page = await openPagePicker();

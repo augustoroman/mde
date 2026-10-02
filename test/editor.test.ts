@@ -825,6 +825,17 @@ describe("media hooks", () => {
     expect(editor.getMarkdown()).toBe("[word](/a/b.html)");
   });
 
+  it("pickMedia replaces the image and video buttons with one that inserts either", async () => {
+    const pickMedia = vi.fn(async () => ({ kind: "video" as const, src: "/clip.webm", poster: "/clip.webp" }));
+    mount("text", { pickMedia });
+    expect(container.querySelector('[data-tool="image"]')).toBeNull();
+    expect(container.querySelector('[data-tool="video"]')).toBeNull();
+    cursorAtEnd();
+    container.querySelector<HTMLButtonElement>('[data-tool="media"]')!.click();
+    await flush();
+    expect(editor.getMarkdown()).toBe('text\n\n<video src="/clip.webm" poster="/clip.webp" controls></video>');
+  });
+
   it("a cancelled picker inserts nothing", async () => {
     const pickVideo = vi.fn(async () => null);
     mount("text", { pickVideo });

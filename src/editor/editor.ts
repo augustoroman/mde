@@ -45,6 +45,8 @@ export interface VideoChoice {
   poster?: string;
   caption?: string;
 }
+/** What a media picker hands back: an image or a video to insert. */
+export type MediaChoice = ({ kind: "image" } & ImageChoice) | ({ kind: "video" } & VideoChoice);
 /** What a link picker hands back. `text` is used only when nothing is selected. */
 export interface LinkChoice {
   href: string;
@@ -80,6 +82,14 @@ export interface EditorOptions {
   pickImage?: (current: ImageState | null) => Promise<ImageChoice | null | undefined>;
   /** Same for videos. */
   pickVideo?: (current: VideoState | null) => Promise<VideoChoice | null | undefined>;
+  /**
+   * One "Insert media" toolbar button in place of the image and video
+   * buttons, for hosts whose picker handles both. Resolve with what to insert,
+   * or insert yourself (`insertImage`, `insertVideo`, `insertImageRow`) and
+   * resolve with `null`. Editing existing media still goes through
+   * `pickImage` and `pickVideo`.
+   */
+  pickMedia?: () => Promise<MediaChoice | null | undefined>;
   /**
    * Your own link dialog (search your own pages, say). Called from the toolbar
    * and ⌘K with the link under the cursor (`href`) and the selected text, or
@@ -372,8 +382,24 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     }),
   ];
   if (images || videos) items.push({ kind: "separator" });
-  if (images) items.push({ kind: "button", id: "image", html: icons.image, title: "Insert image", run: (v) => openImagePopover(v) });
-  if (videos) items.push({ kind: "button", id: "video", html: icons.video, title: "Insert video", run: (v) => openVideoPopover(v) });
+  if (options.pickMedia && (images || videos)) {
+    items.push({
+      kind: "button",
+      id: "media",
+      html: icons.image,
+      title: "Insert media",
+      run: (v) => {
+        void options.pickMedia!().then((choice) => {
+          if (destroyed || !choice?.src) return;
+          if (choice.kind === "video") applyVideo(v, choice);
+          else applyImage(v, choice);
+        });
+      },
+    });
+  } else {
+    if (images) items.push({ kind: "button", id: "image", html: icons.image, title: "Insert image", run: (v) => openImagePopover(v) });
+    if (videos) items.push({ kind: "button", id: "video", html: icons.video, title: "Insert video", run: (v) => openVideoPopover(v) });
+  }
 
   const toolbar = options.toolbar === false ? null : new Toolbar(dom, items, modes, (m) => setMode(m));
   if (toolbar) toolbar.onButton = (item) => item.run(view);
