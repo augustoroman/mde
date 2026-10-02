@@ -9,6 +9,7 @@ import { createSchema, headingLevelsOf, type HeadingLevel } from "../schema";
 import {
   blockActive,
   currentLinkHref,
+  imagesOf,
   insertImage,
   insertImageRow,
   insertVideo,
@@ -18,6 +19,7 @@ import {
   setHeading,
   setLink,
   setParagraph,
+  stackOntoImage,
   toggleList,
   toggleMarkOnWord,
 } from "./commands";
@@ -140,6 +142,21 @@ export interface MarkdownEditor {
 }
 
 const placeholderKey = new PluginKey("mde-placeholder");
+
+/** The position of the top-level image node at or around pos, if any. */
+function targetImage(doc: Node, pos: number): number | null {
+  const image = doc.type.schema.nodes.image;
+  if (!image) return null;
+  const $pos = doc.resolve(Math.max(0, Math.min(pos, doc.content.size)));
+  const candidates = [$pos.nodeAfter, $pos.nodeBefore];
+  const positions = [$pos.pos, $pos.nodeBefore ? $pos.pos - $pos.nodeBefore.nodeSize : -1];
+  for (let i = 0; i < 2; i++) {
+    const node = candidates[i];
+    if (node && node.type === image && $pos.depth === 0) return positions[i];
+  }
+  if ($pos.depth === 1 && $pos.parent.type === image) return $pos.before(1);
+  return null;
+}
 
 function placeholderPlugin(text: string): Plugin {
   return new Plugin({
@@ -302,8 +319,43 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     return true;
   };
 
+  /**
+   * Dropping dragged images onto the middle third of a lone image puts them
+   * side by side with it (on the left when dropped left of its centre).
+   * Anywhere else, ProseMirror's own drop handling moves them above or below.
+   */
+  const stackDrop = (view: EditorView, event: DragEvent, slice: Slice, moved: boolean): boolean => {
+    const dropped = imagesOf(slice);
+    if (!dropped) return false;
+    const at = view.posAtCoords({ left: event.clientX, top: event.clientY });
+    if (!at) return false;
+    const target = targetImage(view.state.doc, at.inside >= 0 ? at.inside : at.pos);
+    if (target == null) return false;
+    const dom = view.nodeDOM(target) as HTMLElement | null;
+    const rect = dom?.querySelector("img")?.getBoundingClientRect() ?? dom?.getBoundingClientRect();
+    if (!rect) return false;
+    if (event.clientY < rect.top + rect.height / 3 || event.clientY > rect.top + (rect.height * 2) / 3) return false;
+    event.preventDefault();
+    return stackOntoImage(target, dropped, event.clientX < rect.left + rect.width / 2, moved)(view.state, view.dispatch);
+  };
+
+  const mediaDropPlugin = new Plugin({
+    props: {
+      handlePaste: (v, event) => uploadFiles(v, Array.from(event.clipboardData?.files ?? [])),
+      handleDrop: (v, event, slice, moved) => {
+        const files = Array.from(event.dataTransfer?.files ?? []);
+        if (files.length) {
+          const at = v.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
+          return uploadFiles(v, files, at);
+        }
+        return stackDrop(v, event, slice, moved);
+      },
+    },
+  });
+
   const plugins: Plugin[] = [
     buildInputRules(schema),
+    mediaDropPlugin,
     ...buildKeymap(schema, { link: (_state, _dispatch, view) => (view ? openLinkPopover(view) : false) }),
     history(),
     canonicalDocPlugin(),
@@ -318,13 +370,6 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     attributes: { class: "mde-content", spellcheck: "true" },
     // Plain-text pastes are parsed as markdown so pasting a `# heading` does the right thing.
     clipboardTextParser: (text) => Slice.maxOpen(parser.parse(text).content),
-    handlePaste: (v, event) => uploadFiles(v, Array.from(event.clipboardData?.files ?? [])),
-    handleDrop: (v, event) => {
-      const files = Array.from(event.dataTransfer?.files ?? []);
-      if (!files.length) return false;
-      const at = v.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
-      return uploadFiles(v, files, at);
-    },
     // nodePos, not pos: the click position inside an atom can be its end,
     // which is the start of the next block, and the update would land there.
     handleDoubleClickOn: (v, _pos, node, nodePos) => {

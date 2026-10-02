@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TextSelection } from "prosemirror-state";
+import { NodeSelection, TextSelection } from "prosemirror-state";
+import { stackOntoImage } from "../src";
 import { createEditor, insertImage, insertVideo, setLink, toggleList, type MarkdownEditor } from "../src";
 
 // jsdom has no layout; ProseMirror's view tolerates that with a few stubs.
@@ -864,6 +865,30 @@ describe("media hooks", () => {
     view.someProp("handleDoubleClickOn", (f) => f(view, 1, first, 0, new MouseEvent("dblclick"), true));
     await flush();
     expect(editor.getMarkdown()).toBe("![a](/new.png)\n\n![b](/b.png)");
+  });
+
+  it("a row with one image left is just that image, never padded with an empty one", () => {
+    mount("![a](/a.png) ![b](/b.png)\n\nafter");
+    const { view } = editor;
+    // delete the second image of the row (positions: row at 0, images at 1 and 2)
+    view.dispatch(view.state.tr.delete(2, 3));
+    expect(editor.getMarkdown()).toBe("![a](/a.png)\n\nafter");
+    expect(editor.getMarkdown()).not.toContain("![](");
+  });
+
+  it("stackOntoImage puts dropped images beside a lone image, on either side", () => {
+    mount("![a](/a.png)\n\n![b](/b.png)");
+    const { view, schema } = editor;
+    const b = view.state.doc.child(1);
+    // select b as if it were being dragged, then drop it onto the right half of a
+    view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, 1)));
+    stackOntoImage(0, [b], false, true)(view.state, view.dispatch);
+    expect(editor.getMarkdown()).toBe("![a](/a.png) ![b](/b.png)");
+    editor.setMarkdown("![a](/a.png)\n\n![b](/b.png)");
+    view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, 1)));
+    stackOntoImage(0, [view.state.doc.child(1)], true, true)(view.state, view.dispatch);
+    expect(editor.getMarkdown()).toBe("![b](/b.png) ![a](/a.png)");
+    expect(schema.nodes.photo_row).toBeDefined();
   });
 
   it("uploadFile handles pasted files in order and skips non-media and nulls", async () => {

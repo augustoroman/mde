@@ -1,4 +1,4 @@
-import type { Attrs, MarkType, Node, NodeType, Schema } from "prosemirror-model";
+import type { Attrs, MarkType, Node, NodeType, Schema, Slice } from "prosemirror-model";
 import { NodeSelection, Selection, TextSelection, type Command, type EditorState, type Transaction } from "prosemirror-state";
 import { setBlockType, toggleMark } from "prosemirror-commands";
 import { liftListItem, wrapInList } from "prosemirror-schema-list";
@@ -398,4 +398,41 @@ export function currentLinkHref(state: EditorState): string | null {
     return href === null;
   });
   return href;
+}
+
+/** The images in a dragged slice, when it holds nothing but images and photo rows. */
+export function imagesOf(slice: Slice): Node[] | null {
+  const schema = slice.content.firstChild?.type.schema;
+  if (!schema?.nodes.image) return null;
+  const out: Node[] = [];
+  let ok = true;
+  slice.content.forEach((node) => {
+    if (node.type === schema.nodes.image) out.push(node);
+    else if (node.type === schema.nodes.photo_row) node.forEach((child) => out.push(child));
+    else ok = false;
+  });
+  return ok && out.length ? out : null;
+}
+
+/**
+ * Drop images onto a lone image to put them side by side with it. `target` is
+ * the position of a top-level image node; `before` puts the dropped images on
+ * its left. With `moved`, the dragged nodes are deleted from where they were.
+ */
+export function stackOntoImage(target: number, images: Node[], before: boolean, moved: boolean): Command {
+  return (state, dispatch) => {
+    const { image, photo_row } = state.schema.nodes;
+    if (!photo_row) return false;
+    const existing = state.doc.nodeAt(target);
+    if (!existing || existing.type !== image || state.doc.resolve(target).depth !== 0) return false;
+    const tr = state.tr;
+    if (moved) tr.deleteSelection();
+    const pos = tr.mapping.map(target);
+    const still = tr.doc.nodeAt(pos);
+    if (!still || still.type !== image) return false;
+    const children = before ? [...images, still] : [still, ...images];
+    tr.replaceWith(pos, pos + still.nodeSize, photo_row.create(null, children));
+    dispatch?.(tr.scrollIntoView());
+    return true;
+  };
 }

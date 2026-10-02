@@ -13,6 +13,8 @@ export {
   insertImage,
   insertImageRow,
   insertVideo,
+  imagesOf,
+  stackOntoImage,
   setLink,
   removeLink,
   toggleList,

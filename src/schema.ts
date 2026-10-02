@@ -35,7 +35,7 @@ export function clampHeadingLevel(level: number, allowed: readonly HeadingLevel[
  *
  *   doc          := block+
  *   block        := paragraph | heading | bullet_list | ordered_list | image? | photo_row? | video? | html_block?
- *   photo_row    := image image+
+ *   photo_row    := image+   (one image is unwrapped to a plain image)
  *   list_item    := paragraph (paragraph | bullet_list | ordered_list)*
  *   inline marks := strong | em | link
  *
@@ -141,10 +141,12 @@ export function createSchema(options: SchemaOptions = {}): Schema {
           : ["figure", { class: "mde-image" }, img];
       },
     };
-    // Two or more images on one markdown line sit side by side.
+    // Two or more images on one markdown line sit side by side. The content
+    // rule allows one so that dragging an image out never makes ProseMirror
+    // fill the row with an empty image; the canonical plugin then unwraps it.
     nodes.photo_row = {
       group: "block",
-      content: "image{2,}",
+      content: "image+",
       defining: true,
       parseDOM: [{ tag: "div.mde-row" }],
       toDOM: () => ["div", { class: "mde-row" }, 0],

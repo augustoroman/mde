@@ -280,8 +280,9 @@
   gap: 8px;
 }
 .mde-content .mde-row figure.mde-image {
-  flex: 1 1 0;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 50%;
 }
 .mde-content .mde-row img {
   max-height: 50vh;

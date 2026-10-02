@@ -25,12 +25,24 @@ export function canonicalDocPlugin(): Plugin {
       if (!transactions.some((tr) => tr.docChanged || tr.selectionSet)) return null;
       const tr = newState.tr;
       removeStrayEmptyParagraphs(newState, tr);
+      unwrapSingleRows(tr);
       joinAdjacentLists(tr);
       clearItemHeadIndent(tr);
       normalizeWhitespace(tr);
       return tr.steps.length ? tr : null;
     },
   });
+}
+
+/** A photo row with one image left in it is just that image. */
+function unwrapSingleRows(tr: Transaction): void {
+  const row = tr.doc.type.schema.nodes.photo_row;
+  if (!row) return;
+  const spots: Array<{ from: number; to: number; node: Node }> = [];
+  tr.doc.forEach((node, pos) => {
+    if (node.type === row && node.childCount === 1) spots.push({ from: pos, to: pos + node.nodeSize, node: node.firstChild! });
+  });
+  for (const { from, to, node } of spots.reverse()) tr.replaceWith(from, to, node);
 }
 
 /** Empty paragraphs that don't hold the cursor: at the top level, or as a continuation paragraph in a list item. */
