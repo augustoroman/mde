@@ -7,7 +7,9 @@ allow-list, and the markdown it emits is canonical and predictable.
 ## Features
 
 - Headings (levels configurable, default 1–3), paragraphs (with indent levels), **bold**, *italic*,
-  links, ordered and unordered lists (nestable), centered block images and videos. Nothing else.
+  links, ordered and unordered lists (nestable), centered block images and videos, each with an
+  optional caption; two or more images on one line sit side by side. Optionally, raw HTML blocks
+  that round-trip untouched. Nothing else.
 - Three modes in one component: rich text, raw markdown source, and read-only preview.
 - Markdown-style typing shortcuts (`# `, `- `, `1. `, `**bold**`, `*em*`), keyboard shortcuts
   (⌘B, ⌘I, ⌘K, ⇧⌘7/8 for lists, ⇧⌘0–3 for block type, Tab/⇧Tab to nest lists), and a toolbar.
@@ -54,7 +56,9 @@ editor.getMarkdown();        // canonical markdown
 editor.setMarkdown("...");   // replace content
 editor.setMode("preview");   // "rich" | "source" | "preview"
 editor.insertImage("https://…/pic.png", "alt text"); // e.g. after your own upload flow
-editor.insertVideo("https://…/clip.mp4");
+editor.insertImage("https://…/pic.png", { alt: "alt text", caption: "Shown under it", link: "https://…/full.png" });
+editor.insertImageRow([{ src: "https://…/a.png" }, { src: "https://…/b.png" }]); // side by side
+editor.insertVideo("https://…/clip.mp4", { poster: "https://…/clip.webp", caption: "Shown under it" });
 editor.focus();
 editor.destroy();
 ```
@@ -78,11 +82,11 @@ both from the toolbar and when an existing image/video is double-clicked:
 ```ts
 createEditor(el, {
   pickImage: async (current) => {
-    // current is null for a new image, or { src, alt } when editing one
+    // current is null for a new image, or { src, alt, caption, link } when editing one
     const asset = await openMediaBrowser({ kind: "image", selected: current?.src });
-    return asset ? { src: asset.url, alt: asset.alt } : null; // null = cancelled
+    return asset ? { src: asset.url, alt: asset.alt, caption: asset.caption } : null; // null = cancelled
   },
-  pickVideo: async (current) => { /* same shape, returns { src } */ },
+  pickVideo: async (current) => { /* same shape with { src, poster, caption } */ },
   uploadFile: async (file) => {
     // called for every image/video file pasted or dropped into the editor
     const { url } = await api.upload(file);
@@ -135,7 +139,16 @@ A paragraph with **strong**, *emphasis* and a [link](https://example.com).
 
 ![alt text](https://example.com/image.png)
 
+[![alt text](https://example.com/thumb.png "A caption")](https://example.com/full.png)
+
+![left](https://example.com/a.png) ![right](https://example.com/b.png)
+
+<video src="https://example.com/clip.mp4" poster="https://example.com/clip.webp" controls></video>
+
+<figure>
 <video src="https://example.com/clip.mp4" controls></video>
+<figcaption>A caption</figcaption>
+</figure>
 ```
 
 - Blocks are separated by exactly one blank line; lists are always tight.
@@ -145,9 +158,17 @@ A paragraph with **strong**, *emphasis* and a [link](https://example.com).
 - Words are separated by exactly one space. Runs of spaces, tabs and non-breaking spaces collapse
   to one, and blocks have no leading or trailing space. Markdown renders all of those identically,
   so the editor never shows a difference the output can't keep.
+- An image's caption is its markdown title (`"…"` after the URL); a link wrapping the image is the
+  image's click-through (`link`), typically the full-size original. Both are optional attributes of
+  the image node.
+- Two or more images on one line, and nothing else, are a `photo_row`: the editor shows them side
+  by side. Text between images splits them into separate blocks.
 - A video is a standalone `<video src="…" controls></video>` line, which renders as-is with any
-  HTML-enabled markdown renderer. Only `src` is preserved.
+  HTML-enabled markdown renderer. `src` and `poster` are preserved; a caption wraps it in
+  `<figure>` with a `<figcaption>`, which also renders as-is.
 - Images are always their own block (an image inside a paragraph splits the paragraph).
+- With `html: true`, HTML blocks (an `<iframe>` embed, say) are kept as opaque blocks and written
+  back verbatim; the editor shows their source. Inline HTML is always plain text.
 - A paragraph indented on its own is written as a block quote, one `> ` per level. That is the only
   markdown construct that indents a block anywhere, and every renderer shows it indented. In the
   editor's HTML it is `<p data-indent="2">`, pushed in by `--mde-indent` per level:
@@ -170,7 +191,8 @@ A paragraph with **strong**, *emphasis* and a [link](https://example.com).
 
 ```
 doc        := block+
-block      := paragraph | heading | bullet_list | ordered_list | image | video
+block      := paragraph | heading | bullet_list | ordered_list | image | photo_row | video | html_block?
+photo_row  := image image+
 list_item  := paragraph (paragraph | bullet_list | ordered_list)*
 marks      := strong | em | link
 ```

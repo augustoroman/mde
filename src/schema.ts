@@ -10,6 +10,11 @@ export interface SchemaOptions {
   images?: boolean;
   /** Allow block videos, default true. When false, `<video>` lines are plain text. */
   videos?: boolean;
+  /**
+   * Keep raw HTML blocks (an `<iframe>` embed, say) as opaque, uneditable
+   * blocks that round-trip verbatim, default false. Inline HTML is always text.
+   */
+  html?: boolean;
 }
 
 export const DEFAULT_HEADING_LEVELS: HeadingLevel[] = [1, 2, 3];
@@ -29,7 +34,8 @@ export function clampHeadingLevel(level: number, allowed: readonly HeadingLevel[
  * The document model, deliberately small:
  *
  *   doc          := block+
- *   block        := paragraph | heading | bullet_list | ordered_list | image? | video?
+ *   block        := paragraph | heading | bullet_list | ordered_list | image? | photo_row? | video? | html_block?
+ *   photo_row    := image image+
  *   list_item    := paragraph (paragraph | bullet_list | ordered_list)*
  *   inline marks := strong | em | link
  *
@@ -45,6 +51,7 @@ export function createSchema(options: SchemaOptions = {}): Schema {
   const levels = options.headingLevels?.length ? options.headingLevels : DEFAULT_HEADING_LEVELS;
   const images = options.images !== false;
   const videos = options.videos !== false;
+  const html = options.html === true;
 
   const nodes: Record<string, NodeSpec> = {
     doc: { content: "block+" },
@@ -106,16 +113,41 @@ export function createSchema(options: SchemaOptions = {}): Schema {
       atom: true,
       draggable: true,
       attrs: {
-        src: { validate: "string" },
+        // A default so that image is "generatable": photo_row's content requires it.
+        src: { default: "", validate: "string" },
         alt: { default: "", validate: "string" },
+        /** Shown under the image; markdown's image title. */
+        caption: { default: "", validate: "string" },
+        /** Where clicking the image goes (the full-size original, say); markdown's `[![…](…)](link)`. */
+        link: { default: "", validate: "string" },
       },
       parseDOM: [
         {
           tag: "img[src]",
-          getAttrs: (dom) => ({ src: dom.getAttribute("src"), alt: dom.getAttribute("alt") ?? "" }),
+          getAttrs: (dom) => ({
+            src: dom.getAttribute("src"),
+            alt: dom.getAttribute("alt") ?? "",
+            caption: dom.getAttribute("data-caption") ?? dom.getAttribute("title") ?? "",
+            link: dom.getAttribute("data-link") ?? "",
+          }),
         },
       ],
-      toDOM: (node) => ["figure", { class: "mde-image" }, ["img", { src: node.attrs.src, alt: node.attrs.alt }]],
+      toDOM: (node) => {
+        const img: [string, Record<string, string>] = ["img", { src: node.attrs.src, alt: node.attrs.alt }];
+        if (node.attrs.caption) img[1]["data-caption"] = node.attrs.caption;
+        if (node.attrs.link) img[1]["data-link"] = node.attrs.link;
+        return node.attrs.caption
+          ? ["figure", { class: "mde-image" }, img, ["figcaption", node.attrs.caption]]
+          : ["figure", { class: "mde-image" }, img];
+      },
+    };
+    // Two or more images on one markdown line sit side by side.
+    nodes.photo_row = {
+      group: "block",
+      content: "image{2,}",
+      defining: true,
+      parseDOM: [{ tag: "div.mde-row" }],
+      toDOM: () => ["div", { class: "mde-row" }, 0],
     };
   }
 
@@ -124,18 +156,40 @@ export function createSchema(options: SchemaOptions = {}): Schema {
       group: "block",
       atom: true,
       draggable: true,
-      attrs: { src: { validate: "string" } },
+      attrs: {
+        src: { validate: "string" },
+        poster: { default: "", validate: "string" },
+        caption: { default: "", validate: "string" },
+      },
       parseDOM: [
         {
           tag: "video[src]",
-          getAttrs: (dom) => ({ src: dom.getAttribute("src") }),
+          getAttrs: (dom) => ({
+            src: dom.getAttribute("src"),
+            poster: dom.getAttribute("poster") ?? "",
+            caption: dom.getAttribute("data-caption") ?? "",
+          }),
         },
       ],
-      toDOM: (node) => [
-        "figure",
-        { class: "mde-video" },
-        ["video", { src: node.attrs.src, controls: "controls", preload: "metadata" }],
-      ],
+      toDOM: (node) => {
+        const video: [string, Record<string, string>] = ["video", { src: node.attrs.src, controls: "controls", preload: "metadata" }];
+        if (node.attrs.poster) video[1].poster = node.attrs.poster;
+        if (node.attrs.caption) video[1]["data-caption"] = node.attrs.caption;
+        return node.attrs.caption
+          ? ["figure", { class: "mde-video" }, video, ["figcaption", node.attrs.caption]]
+          : ["figure", { class: "mde-video" }, video];
+      },
+    };
+  }
+
+  if (html) {
+    nodes.html_block = {
+      group: "block",
+      atom: true,
+      draggable: true,
+      attrs: { html: { validate: "string" } },
+      parseDOM: [{ tag: "div.mde-html[data-html]", getAttrs: (dom) => ({ html: dom.getAttribute("data-html") ?? "" }) }],
+      toDOM: (node) => ["div", { class: "mde-html", "data-html": node.attrs.html }, ["pre", node.attrs.html]],
     };
   }
 
@@ -172,6 +226,11 @@ export function createSchema(options: SchemaOptions = {}): Schema {
 
 /** Default schema with heading levels 1–3. */
 export const schema = createSchema();
+
+/** Read back the options a schema was created with. */
+export function optionsOf(s: Schema): Required<SchemaOptions> {
+  return { headingLevels: headingLevelsOf(s), images: !!s.nodes.image, videos: !!s.nodes.video, html: !!s.nodes.html_block };
+}
 
 /** Read back which heading levels a schema was created with. */
 export function headingLevelsOf(s: Schema): HeadingLevel[] {

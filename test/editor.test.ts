@@ -817,7 +817,7 @@ describe("media hooks", () => {
     mount("![old](/old.png)", { pickImage });
     const { view } = editor;
     view.someProp("handleDoubleClickOn", (f) => f(view, 0, view.state.doc.firstChild!, 0, new MouseEvent("dblclick"), true));
-    expect(pickImage).toHaveBeenCalledWith({ src: "/old.png", alt: "old" });
+    expect(pickImage).toHaveBeenCalledWith({ src: "/old.png", alt: "old", caption: "", link: "" });
     await flush();
     expect(editor.getMarkdown()).toBe("![new](/new.png)");
   });

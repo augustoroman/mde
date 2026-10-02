@@ -10,6 +10,7 @@ import {
   blockActive,
   currentLinkHref,
   insertImage,
+  insertImageRow,
   insertVideo,
   listActive,
   markActive,
@@ -34,9 +35,28 @@ export type { EditorMode };
 export interface ImageChoice {
   src: string;
   alt?: string;
+  /** Shown under the image (markdown's image title). */
+  caption?: string;
+  /** Where clicking the image goes, e.g. the full-size original. */
+  link?: string;
 }
 export interface VideoChoice {
   src: string;
+  poster?: string;
+  caption?: string;
+}
+/** An existing image, as handed to `pickImage`. */
+export interface ImageState {
+  src: string;
+  alt: string;
+  caption: string;
+  link: string;
+}
+/** An existing video, as handed to `pickVideo`. */
+export interface VideoState {
+  src: string;
+  poster: string;
+  caption: string;
 }
 export interface UploadResult {
   kind: "image" | "video";
@@ -52,9 +72,9 @@ export interface EditorOptions {
    * `null`, and from a double-click on an existing image with its attributes.
    * Replaces the built-in URL popover for images.
    */
-  pickImage?: (current: { src: string; alt: string } | null) => Promise<ImageChoice | null | undefined>;
+  pickImage?: (current: ImageState | null) => Promise<ImageChoice | null | undefined>;
   /** Same for videos. */
-  pickVideo?: (current: { src: string } | null) => Promise<VideoChoice | null | undefined>;
+  pickVideo?: (current: VideoState | null) => Promise<VideoChoice | null | undefined>;
   /**
    * Called for each image/video file pasted or dropped into the editor. Resolve
    * with where it ended up and it is inserted at the paste/drop position;
@@ -71,6 +91,8 @@ export interface EditorOptions {
   images?: boolean;
   /** Allow videos, default true. */
   videos?: boolean;
+  /** Keep raw HTML blocks as opaque blocks that round-trip verbatim, default false. */
+  html?: boolean;
   /** Placeholder shown when the document is empty. */
   placeholder?: string;
   /** Hide the toolbar (keyboard shortcuts keep working). */
@@ -88,8 +110,10 @@ export interface MarkdownEditor {
   setMarkdown(markdown: string): void;
   getMode(): EditorMode;
   setMode(mode: EditorMode): void;
-  insertImage(src: string, alt?: string): void;
-  insertVideo(src: string): void;
+  insertImage(src: string, alt?: string | ImageChoice): void;
+  /** Two or more images side by side (one inserts normally). */
+  insertImageRow(images: ImageChoice[]): void;
+  insertVideo(src: string, attrs?: { poster?: string; caption?: string }): void;
   focus(): void;
   destroy(): void;
 }
@@ -114,7 +138,7 @@ function placeholderPlugin(text: string): Plugin {
 
 /** Mount a markdown editor into `container`. */
 export function createEditor(container: HTMLElement, options: EditorOptions = {}): MarkdownEditor {
-  const schema = createSchema({ headingLevels: options.headingLevels, images: options.images, videos: options.videos });
+  const schema = createSchema({ headingLevels: options.headingLevels, images: options.images, videos: options.videos, html: options.html });
   const images = !!schema.nodes.image;
   const videos = !!schema.nodes.video;
   const parser = createMarkdownParser(schema);
@@ -157,28 +181,35 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     return true;
   };
 
-  const applyImage = (view: EditorView, choice: ImageChoice, edit?: { pos: number }) => {
-    const alt = choice.alt ?? "";
+  // When editing, a choice that leaves a field undefined keeps the existing value.
+  const applyImage = (view: EditorView, choice: ImageChoice, edit?: { pos: number } & Partial<ImageState>) => {
+    const attrs = {
+      src: choice.src,
+      alt: choice.alt ?? edit?.alt ?? "",
+      caption: choice.caption ?? edit?.caption ?? "",
+      link: choice.link ?? edit?.link ?? "",
+    };
     if (edit && view.state.doc.nodeAt(edit.pos)?.type === schema.nodes.image) {
-      view.dispatch(view.state.tr.setNodeMarkup(edit.pos, undefined, { src: choice.src, alt }));
+      view.dispatch(view.state.tr.setNodeMarkup(edit.pos, undefined, attrs));
     } else {
-      insertImage(schema, choice.src, alt)(view.state, view.dispatch);
+      insertImage(schema, attrs.src, attrs)(view.state, view.dispatch);
     }
     view.focus();
   };
 
-  const applyVideo = (view: EditorView, choice: VideoChoice, edit?: { pos: number }) => {
+  const applyVideo = (view: EditorView, choice: VideoChoice, edit?: { pos: number } & Partial<VideoState>) => {
+    const attrs = { src: choice.src, poster: choice.poster ?? edit?.poster ?? "", caption: choice.caption ?? edit?.caption ?? "" };
     if (edit && view.state.doc.nodeAt(edit.pos)?.type === schema.nodes.video) {
-      view.dispatch(view.state.tr.setNodeMarkup(edit.pos, undefined, { src: choice.src }));
+      view.dispatch(view.state.tr.setNodeMarkup(edit.pos, undefined, attrs));
     } else {
-      insertVideo(schema, choice.src)(view.state, view.dispatch);
+      insertVideo(schema, attrs.src, attrs)(view.state, view.dispatch);
     }
     view.focus();
   };
 
-  const openImagePopover = (view: EditorView, edit?: { pos: number; src: string; alt: string }) => {
+  const openImagePopover = (view: EditorView, edit?: { pos: number } & ImageState) => {
     if (options.pickImage) {
-      void options.pickImage(edit ? { src: edit.src, alt: edit.alt } : null).then((choice) => {
+      void options.pickImage(edit ? { src: edit.src, alt: edit.alt, caption: edit.caption, link: edit.link } : null).then((choice) => {
         if (!destroyed && choice?.src) applyImage(view, choice, edit);
       });
       return;
@@ -188,27 +219,31 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
       fields: [
         { name: "src", label: "Image URL", value: edit?.src ?? "", placeholder: "https://", type: "url", required: true },
         { name: "alt", label: "Alt text", value: edit?.alt ?? "", placeholder: "Describe the image" },
+        { name: "caption", label: "Caption", value: edit?.caption ?? "", placeholder: "Shown under the image" },
       ],
       submitLabel: edit ? "Update" : "Insert",
-      onSubmit: ({ src, alt }) => {
-        if (src) applyImage(view, { src, alt }, edit);
+      onSubmit: ({ src, alt, caption }) => {
+        if (src) applyImage(view, { src, alt, caption }, edit);
       },
     });
   };
 
-  const openVideoPopover = (view: EditorView, edit?: { pos: number; src: string }) => {
+  const openVideoPopover = (view: EditorView, edit?: { pos: number } & VideoState) => {
     if (options.pickVideo) {
-      void options.pickVideo(edit ? { src: edit.src } : null).then((choice) => {
+      void options.pickVideo(edit ? { src: edit.src, poster: edit.poster, caption: edit.caption } : null).then((choice) => {
         if (!destroyed && choice?.src) applyVideo(view, choice, edit);
       });
       return;
     }
     popover.open({
       title: edit ? "Edit video" : "Insert video",
-      fields: [{ name: "src", label: "Video URL", value: edit?.src ?? "", placeholder: "https://…/clip.mp4", type: "url", required: true }],
+      fields: [
+        { name: "src", label: "Video URL", value: edit?.src ?? "", placeholder: "https://…/clip.mp4", type: "url", required: true },
+        { name: "caption", label: "Caption", value: edit?.caption ?? "", placeholder: "Shown under the video" },
+      ],
       submitLabel: edit ? "Update" : "Insert",
-      onSubmit: ({ src }) => {
-        if (src) applyVideo(view, { src }, edit);
+      onSubmit: ({ src, caption }) => {
+        if (src) applyVideo(view, { src, caption }, edit);
       },
     });
   };
@@ -259,11 +294,11 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     },
     handleDoubleClickOn: (v, pos, node) => {
       if (images && node.type === schema.nodes.image) {
-        openImagePopover(v, { pos, src: node.attrs.src, alt: node.attrs.alt });
+        openImagePopover(v, { pos, src: node.attrs.src, alt: node.attrs.alt, caption: node.attrs.caption, link: node.attrs.link });
         return true;
       }
       if (videos && node.type === schema.nodes.video) {
-        openVideoPopover(v, { pos, src: node.attrs.src });
+        openVideoPopover(v, { pos, src: node.attrs.src, poster: node.attrs.poster, caption: node.attrs.caption });
         return true;
       }
       return false;
@@ -399,10 +434,15 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
       if (mode !== "rich") setMode("rich");
       insertImage(schema, src, alt)(view.state, view.dispatch);
     },
-    insertVideo(src) {
+    insertImageRow(list) {
+      if (!images) return;
+      if (mode !== "rich") setMode("rich");
+      insertImageRow(schema, list)(view.state, view.dispatch);
+    },
+    insertVideo(src, attrs = {}) {
       if (!videos) return;
       if (mode !== "rich") setMode("rich");
-      insertVideo(schema, src)(view.state, view.dispatch);
+      insertVideo(schema, src, attrs)(view.state, view.dispatch);
     },
     focus,
     destroy() {

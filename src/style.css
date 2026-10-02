@@ -262,8 +262,40 @@
 .mde-content figure.mde-image,
 .mde-content figure.mde-video {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   margin: 0;
+}
+.mde-content figcaption {
+  margin-top: 0.3em;
+  font-size: 0.9em;
+  opacity: 0.75;
+  text-align: center;
+}
+/* Images on one line sit side by side, sharing the width. */
+.mde-content .mde-row {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 8px;
+}
+.mde-content .mde-row figure.mde-image {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.mde-content .mde-row img {
+  max-height: 50vh;
+}
+/* Raw HTML blocks are shown as their source, not rendered. */
+.mde-content .mde-html pre {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px dashed rgba(127, 127, 127, 0.6);
+  border-radius: 6px;
+  font-size: 0.85em;
+  white-space: pre-wrap;
+  word-break: break-all;
+  opacity: 0.8;
 }
 .mde-content img,
 .mde-content video {

@@ -288,16 +288,42 @@ export function insertBlockLeaf(node: Node): Command {
   };
 }
 
+/** Attributes of an image beyond its source. */
+export interface ImageAttrs {
+  alt?: string;
+  /** Shown under the image. */
+  caption?: string;
+  /** Where clicking the image goes. */
+  link?: string;
+}
+
+/** Attributes of a video beyond its source. */
+export interface VideoAttrs {
+  poster?: string;
+  caption?: string;
+}
+
 /** Insert an image; a no-op command when the schema was created without images. */
-export function insertImage(schema: Schema, src: string, alt = ""): Command {
+export function insertImage(schema: Schema, src: string, alt: string | ImageAttrs = ""): Command {
   const type = schema.nodes.image;
-  return type ? insertBlockLeaf(type.create({ src, alt })) : () => false;
+  const attrs = typeof alt === "string" ? { alt } : alt;
+  return type ? insertBlockLeaf(type.create({ src, alt: attrs.alt ?? "", caption: attrs.caption ?? "", link: attrs.link ?? "" })) : () => false;
+}
+
+/** Insert two or more images side by side; one image inserts normally. */
+export function insertImageRow(schema: Schema, images: Array<{ src: string } & ImageAttrs>): Command {
+  const type = schema.nodes.image;
+  const row = schema.nodes.photo_row;
+  if (!type || !images.length) return () => false;
+  if (images.length === 1) return insertImage(schema, images[0].src, images[0]);
+  const nodes = images.map((i) => type.create({ src: i.src, alt: i.alt ?? "", caption: i.caption ?? "", link: i.link ?? "" }));
+  return insertBlockLeaf(row.create(null, nodes));
 }
 
 /** Insert a video; a no-op command when the schema was created without videos. */
-export function insertVideo(schema: Schema, src: string): Command {
+export function insertVideo(schema: Schema, src: string, attrs: VideoAttrs = {}): Command {
   const type = schema.nodes.video;
-  return type ? insertBlockLeaf(type.create({ src })) : () => false;
+  return type ? insertBlockLeaf(type.create({ src, poster: attrs.poster ?? "", caption: attrs.caption ?? "" })) : () => false;
 }
 
 /** Boundaries of the link mark instance the cursor is inside, if any. */

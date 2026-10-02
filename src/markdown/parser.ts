@@ -11,7 +11,8 @@ import { headingLevelsOf, schema as defaultSchema } from "../schema";
 export function createMarkdownParser(schema: Schema = defaultSchema): MarkdownParser {
   const images = !!schema.nodes.image;
   const videos = !!schema.nodes.video;
-  const tokenizer = createTokenizer({ headingLevels: headingLevelsOf(schema), images, videos });
+  const html = !!schema.nodes.html_block;
+  const tokenizer = createTokenizer({ headingLevels: headingLevelsOf(schema), images, videos, html });
 
   return new MarkdownParser(schema, tokenizer, {
     paragraph: { block: "paragraph", getAttrs: (tok) => ({ indent: Number(tok.attrGet("indent")) || 0 }) },
@@ -20,9 +21,32 @@ export function createMarkdownParser(schema: Schema = defaultSchema): MarkdownPa
     ordered_list: { block: "ordered_list", getAttrs: (tok) => ({ order: Number(tok.attrGet("start")) || 1 }) },
     list_item: { block: "list_item" },
     ...(images
-      ? { image_block: { node: "image", getAttrs: (tok) => ({ src: String(tok.attrGet("src") ?? ""), alt: String(tok.attrGet("alt") ?? "") }) } }
+      ? {
+          image_block: {
+            node: "image",
+            getAttrs: (tok) => ({
+              src: String(tok.attrGet("src") ?? ""),
+              alt: String(tok.attrGet("alt") ?? ""),
+              caption: String(tok.attrGet("caption") ?? ""),
+              link: String(tok.attrGet("link") ?? ""),
+            }),
+          },
+          photo_row: { block: "photo_row" },
+        }
       : {}),
-    ...(videos ? { video: { node: "video", getAttrs: (tok) => ({ src: String(tok.attrGet("src") ?? "") }) } } : {}),
+    ...(videos
+      ? {
+          video: {
+            node: "video",
+            getAttrs: (tok) => ({
+              src: String(tok.attrGet("src") ?? ""),
+              poster: String(tok.attrGet("poster") ?? ""),
+              caption: String(tok.attrGet("caption") ?? ""),
+            }),
+          },
+        }
+      : {}),
+    ...(html ? { html_block: { node: "html_block", getAttrs: (tok) => ({ html: tok.content }) } } : {}),
     em: { mark: "em" },
     strong: { mark: "strong" },
     link: { mark: "link", getAttrs: (tok) => ({ href: String(tok.attrGet("href") ?? "") }) },

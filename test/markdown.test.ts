@@ -7,6 +7,11 @@ import { normalizeMarkdown } from "../src";
 const roundTrip = (md: string) => serializeMarkdown(parseMarkdown(md));
 /** Compact structural view of a document: `paragraph(text)` etc. */
 const shape = (md: string) => parseMarkdown(md).toString();
+/** Attributes of the first block, or of its n-th child. */
+const attrs = (md: string, child?: number) => {
+  const first = parseMarkdown(md).firstChild!;
+  return child === undefined ? first.attrs : first.child(child).attrs;
+};
 
 describe("canonical documents round-trip unchanged", () => {
   const canonical = [
@@ -18,6 +23,12 @@ describe("canonical documents round-trip unchanged", () => {
     "3. starts at three\n4. four",
     "![Alt text](https://example.com/pic.png)",
     '<video src="https://example.com/clip.mp4" controls></video>',
+    '![Alt](https://x.test/a.jpg "A caption")',
+    '[![](https://x.test/t.jpg "Sized to fit")](https://x.test/full.jpg)',
+    "![a](https://x.test/a.jpg) ![b](https://x.test/b.jpg)",
+    '[![](https://x.test/a.jpg)](https://x.test/A.jpg) [![](https://x.test/b.jpg "Right")](https://x.test/B.jpg)',
+    '<video src="https://x.test/v.webm" poster="https://x.test/v.webp" controls></video>',
+    '<figure>\n<video src="https://x.test/v.webm" controls></video>\n<figcaption>Clapping, at last</figcaption>\n</figure>',
     "# Heading\n\nParagraph one.\n\nParagraph two.\n\n- list\n\n![](https://x.test/i.jpg)\n\nAfter.",
   ];
   for (const md of canonical) {
@@ -119,8 +130,8 @@ describe("images and videos", () => {
     expect(roundTrip("before ![a](https://x.test/1.png) after")).toBe("before\n\n![a](https://x.test/1.png)\n\nafter");
   });
 
-  it("splits several images in one paragraph", () => {
-    expect(roundTrip("![a](/1.png)![b](/2.png)")).toBe("![a](/1.png)\n\n![b](/2.png)");
+  it("several images in one paragraph become a photo row", () => {
+    expect(roundTrip("![a](/1.png)![b](/2.png)")).toBe("![a](/1.png) ![b](/2.png)");
   });
 
   it("degrades images inside list items to links", () => {
@@ -238,5 +249,62 @@ describe("resilience", () => {
 
   it("resolves reference links", () => {
     expect(roundTrip("[a][ref]\n\n[ref]: https://x.test")).toBe("[a](https://x.test)");
+  });
+});
+
+describe("captions, links and photo rows", () => {
+  it("keeps the image title as a caption and a wrapping link as the click-through", () => {
+    expect(shape('[![alt](/t.jpg "Cap")](/full.jpg)')).toBe("doc(image)");
+    expect(attrs('[![alt](/t.jpg "Cap")](/full.jpg)')).toEqual({ src: "/t.jpg", alt: "alt", caption: "Cap", link: "/full.jpg" });
+  });
+
+  it("escapes quotes in captions and unescapes them back", () => {
+    expect(roundTrip('![](/a.jpg "He said \\"hi\\"")')).toBe('![](/a.jpg "He said \\"hi\\"")');
+    expect(attrs('![](/a.jpg "He said \\"hi\\"")').caption).toBe('He said "hi"');
+  });
+
+  it("two or more images on a line are a photo row; one is not", () => {
+    expect(shape("![](/a.jpg) ![](/b.jpg) ![](/c.jpg)")).toBe("doc(photo_row(image, image, image))");
+    expect(attrs("![](/a.jpg) ![](/b.jpg) ![](/c.jpg)", 2).src).toBe("/c.jpg");
+    expect(shape("![](/a.jpg)")).toBe("doc(image)");
+  });
+
+  it("text between images breaks the row into blocks", () => {
+    expect(roundTrip("![](/a.jpg) and ![](/b.jpg)")).toBe("![](/a.jpg)\n\nand\n\n![](/b.jpg)");
+  });
+
+  it("a figure holding a video carries its caption; other attributes are dropped", () => {
+    const md = '<figure class="embed">\n<video controls preload="none" poster="/p.webp" src="/v.webm"></video>\n<figcaption>Hello &amp; bye</figcaption>\n</figure>';
+    expect(shape(md)).toBe("doc(video)");
+    expect(attrs(md)).toEqual({ src: "/v.webm", poster: "/p.webp", caption: "Hello & bye" });
+    expect(roundTrip(md)).toBe('<figure>\n<video src="/v.webm" poster="/p.webp" controls></video>\n<figcaption>Hello &amp; bye</figcaption>\n</figure>');
+  });
+
+  it("a figure without a video is text", () => {
+    expect(shape("<figure>\n<img src=/x.jpg>\n</figure>")).toContain("paragraph");
+  });
+});
+
+describe("raw html blocks", () => {
+  const htmlParser = createMarkdownParser(createSchema({ html: true }));
+  const rt = (md: string) => serializeMarkdown(htmlParser.parse(md));
+
+  it("are text by default", () => {
+    expect(shape('<div class="embed">\n<iframe src="https://x.test/e"></iframe>\n</div>')).toBe('doc(paragraph("<div class=\\"embed\\"> <iframe src=\\"https://x.test/e\\"></iframe> </div>"))');
+  });
+
+  it("round-trip verbatim with the html option", () => {
+    const md = '<div class="embed">\n<iframe src="https://x.test/e" allowfullscreen></iframe>\n</div>';
+    expect(rt(md)).toBe(md);
+    expect(htmlParser.parse(md).firstChild!.type.name).toBe("html_block");
+  });
+
+  it("still parse videos and figures as videos", () => {
+    expect(htmlParser.parse('<video src="/v.webm" controls></video>').firstChild!.type.name).toBe("video");
+    expect(htmlParser.parse('<figure>\n<video src="/v.webm"></video>\n<figcaption>c</figcaption>\n</figure>').firstChild!.type.name).toBe("video");
+  });
+
+  it("inline html stays text", () => {
+    expect(htmlParser.parse("some <u>underlined</u> words").toString()).toBe('doc(paragraph("some <u>underlined</u> words"))');
   });
 });

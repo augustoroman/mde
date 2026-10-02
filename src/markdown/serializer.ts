@@ -48,11 +48,28 @@ export const markdownSerializer = new MarkdownSerializer(
       state.renderContent(node);
     },
     image(state, node) {
-      state.write(`![${state.esc(node.attrs.alt || "")}](${escapeUrl(node.attrs.src)})`);
+      state.write(imageMarkdown(state, node));
+      state.closeBlock(node);
+    },
+    photo_row(state, node) {
+      const parts: string[] = [];
+      node.forEach((image) => parts.push(imageMarkdown(state, image)));
+      state.write(parts.join(" "));
       state.closeBlock(node);
     },
     video(state, node) {
-      state.write(`<video src="${String(node.attrs.src).replace(/"/g, "%22")}" controls></video>`);
+      const attr = (v: string) => String(v).replace(/"/g, "%22");
+      const poster = node.attrs.poster ? ` poster="${attr(node.attrs.poster)}"` : "";
+      const tag = `<video src="${attr(node.attrs.src)}"${poster} controls></video>`;
+      if (node.attrs.caption) {
+        state.write(`<figure>\n${tag}\n<figcaption>${escapeHtml(node.attrs.caption)}</figcaption>\n</figure>`);
+      } else {
+        state.write(tag);
+      }
+      state.closeBlock(node);
+    },
+    html_block(state, node) {
+      state.write(String(node.attrs.html).trim());
       state.closeBlock(node);
     },
     text(state, node) {
@@ -79,6 +96,17 @@ export const markdownSerializer = new MarkdownSerializer(
   },
   { strict: true },
 );
+
+/** `[![alt](src "caption")](link)`, with the link and caption only when set. */
+function imageMarkdown(state: MarkdownSerializerState, node: Node): string {
+  const title = node.attrs.caption ? ` "${String(node.attrs.caption).replace(/"/g, '\\"')}"` : "";
+  const image = `![${state.esc(node.attrs.alt || "")}](${escapeUrl(node.attrs.src)}${title})`;
+  return node.attrs.link ? `[${image}](${escapeUrl(node.attrs.link)})` : image;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
 function writeText(state: State, text: string, videosEnabled: boolean): void {
   // A paragraph that happens to start with a literal `<video …>` line must not

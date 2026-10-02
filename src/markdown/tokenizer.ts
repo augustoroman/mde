@@ -6,8 +6,20 @@ import MarkdownIt, {
 } from "markdown-it";
 import { clampHeadingLevel, type HeadingLevel } from "../schema";
 
-/** A standalone video line: `<video src="https://…"></video>` (attributes other than src are ignored). */
-export const VIDEO_LINE_RE = /^<video\b[^>]*?\bsrc="([^"\s]+)"[^>]*>(?:\s*<\/video>)?\s*$/i;
+/** A standalone video line: `<video src="https://…"></video>` (`src` and `poster` are kept, other attributes ignored). */
+export const VIDEO_LINE_RE = /^<video\b([^>]*?\bsrc="[^"\s]+"[^>]*)>(?:\s*<\/video>)?\s*$/i;
+/** A video with a caption: `<figure>` holding a `<video>` line and an optional `<figcaption>`, closed by `</figure>`. */
+const FIGURE_RE = /^<figure\b[^>]*>\s*<video\b([^>]*?\bsrc="[^"\s]+"[^>]*)>(?:\s*<\/video>)?\s*(?:<figcaption>([\s\S]*?)<\/figcaption>)?\s*<\/figure>\s*$/i;
+
+/** Pull `src` and `poster` out of a video tag's attribute string. */
+export function videoAttrs(attrs: string): { src: string; poster: string } {
+  const get = (name: string) => new RegExp(`\\b${name}="([^"]*)"`, "i").exec(attrs)?.[1] ?? "";
+  return { src: get("src"), poster: get("poster") };
+}
+
+function unescapeHtml(s: string): string {
+  return s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+}
 
 export interface TokenizerOptions {
   headingLevels: readonly HeadingLevel[];
@@ -15,6 +27,8 @@ export interface TokenizerOptions {
   images: boolean;
   /** Recognize standalone `<video>` lines. */
   videos: boolean;
+  /** Keep raw HTML blocks as opaque nodes. */
+  html?: boolean;
 }
 
 /**
@@ -28,32 +42,52 @@ export interface TokenizerOptions {
  *     clamped, block quotes become paragraph indentation, and so on.
  */
 export function createTokenizer(options: TokenizerOptions): MarkdownItInstance {
-  const md = new MarkdownIt("commonmark", { html: false, linkify: false, typographer: false, breaks: false });
+  const md = new MarkdownIt("commonmark", { html: !!options.html, linkify: false, typographer: false, breaks: false });
 
-  md.disable(
-    ["code", "fence", "hr", "table", "html_block", "backticks", "html_inline", "strikethrough"],
-    true,
-  );
+  md.disable(["code", "fence", "hr", "table", "backticks", "html_inline", "strikethrough"], true);
+  if (!options.html) md.disable(["html_block"], true);
 
   if (options.videos) {
-    md.block.ruler.before("paragraph", "video", videoRule, { alt: ["paragraph", "reference", "blockquote", "list"] });
+    // Before html_block, which would otherwise swallow `<video>` and `<figure>` lines when html is on.
+    md.block.ruler.before("html_block", "video", videoRule, { alt: ["paragraph", "reference", "blockquote", "list"] });
   }
   md.core.ruler.push("mde_normalize", (state) => normalize(state, options));
 
   return md;
 }
 
-function videoRule(state: StateBlock, startLine: number, _endLine: number, silent: boolean): boolean {
-  const pos = state.bMarks[startLine] + state.tShift[startLine];
-  const max = state.eMarks[startLine];
-  const match = VIDEO_LINE_RE.exec(state.src.slice(pos, max));
-  if (!match) return false;
+function videoRule(state: StateBlock, startLine: number, endLine: number, silent: boolean): boolean {
+  const lineText = (n: number) => state.src.slice(state.bMarks[n] + state.tShift[n], state.eMarks[n]);
+  const first = lineText(startLine);
+  let attrs: string | undefined;
+  let caption = "";
+  let lines = 1;
+  const single = VIDEO_LINE_RE.exec(first);
+  if (single) {
+    attrs = single[1];
+  } else if (/^<figure\b/i.test(first)) {
+    // A figure spans up to six lines; find its closing tag.
+    for (let n = startLine; n < Math.min(endLine, startLine + 6); n++) {
+      if (!/<\/figure>\s*$/i.test(lineText(n))) continue;
+      const block = Array.from({ length: n - startLine + 1 }, (_, i) => lineText(startLine + i)).join("\n");
+      const m = FIGURE_RE.exec(block);
+      if (!m) return false;
+      attrs = m[1];
+      caption = unescapeHtml((m[2] ?? "").trim());
+      lines = n - startLine + 1;
+      break;
+    }
+  }
+  if (attrs === undefined) return false;
   if (silent) return true;
 
+  const { src, poster } = videoAttrs(attrs);
   const token = state.push("video", "video", 0);
-  token.attrSet("src", match[1]);
-  token.map = [startLine, startLine + 1];
-  state.line = startLine + 1;
+  token.attrSet("src", src);
+  token.attrSet("poster", poster);
+  token.attrSet("caption", caption);
+  token.map = [startLine, startLine + lines];
+  state.line = startLine + lines;
   return true;
 }
 
@@ -198,6 +232,15 @@ function normalizeBlocks(state: StateCore, nodes: TokenTree[], inListItem: boole
         break;
       }
 
+      case "html_block":
+        if (options.html && node.open.content.trim()) {
+          node.open.content = node.open.content.trim();
+          out.push(node);
+        } else if (node.open.content.trim()) {
+          out.push(paragraphOf(state, [textToken(state, node.open.content.trim())]));
+        }
+        break;
+
       default:
         // Anything else has no place in the schema. Containers are unwrapped,
         // leaves with text become paragraphs, empty leaves are dropped.
@@ -268,19 +311,38 @@ function splitParagraph(state: StateCore, paragraph: TokenTree, imagesAsLinks: b
     run = [];
   };
 
-  for (const child of children) {
-    if (child.type === "image") {
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    // `[![alt](src)](link)`: a link holding only an image is the image's click-through.
+    if (child.type === "link_open" && children[i + 1]?.type === "image" && children[i + 2]?.type === "link_close") {
       flushRun();
-      const image = makeToken(state, "image_block", "img", 0);
-      image.attrSet("src", String(child.attrGet("src") ?? ""));
-      image.attrSet("alt", child.content ?? "");
-      out.push({ open: image, close: null, children: [] });
+      out.push(imageBlock(state, children[i + 1], String(child.attrGet("href") ?? "")));
+      i += 2;
+    } else if (child.type === "image") {
+      flushRun();
+      out.push(imageBlock(state, child, ""));
     } else {
       run.push(child);
     }
   }
   flushRun();
+
+  // Only images, two or more: they sit side by side.
+  if (out.length >= 2 && out.every((n) => n.open.type === "image_block")) {
+    const open = makeToken(state, "photo_row_open", "div", 1);
+    const close = makeToken(state, "photo_row_close", "div", -1);
+    return [{ open, close, children: out }];
+  }
   return out;
+}
+
+function imageBlock(state: StateCore, image: Token, link: string): TokenTree {
+  const block = makeToken(state, "image_block", "img", 0);
+  block.attrSet("src", String(image.attrGet("src") ?? ""));
+  block.attrSet("alt", image.content ?? "");
+  block.attrSet("caption", String(image.attrGet("title") ?? ""));
+  block.attrSet("link", link);
+  return { open: block, close: null, children: [] };
 }
 
 function inlineWithoutImages(state: StateCore, children: Token[]): Token[] {
