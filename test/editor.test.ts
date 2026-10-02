@@ -891,6 +891,16 @@ describe("media hooks", () => {
     expect(schema.nodes.photo_row).toBeDefined();
   });
 
+  it("stackOntoImage deletes the dragged node even when something else is selected", () => {
+    mount("![a](/a.png)\n\n![b](/b.png)\n\ntext");
+    const { view } = editor;
+    // the cursor sits in the text; b is dragged without being selected
+    view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)));
+    const b = NodeSelection.create(view.state.doc, 1);
+    stackOntoImage(0, [b.node], false, b)(view.state, view.dispatch);
+    expect(editor.getMarkdown()).toBe("![a](/a.png) ![b](/b.png)\n\ntext");
+  });
+
   it("uploadFile handles pasted files in order and skips non-media and nulls", async () => {
     const uploadFile = vi.fn(async (file: File) =>
       file.name === "skip.png" ? null : { kind: file.type.startsWith("video") ? "video" : "image", src: "/up/" + file.name } as const,

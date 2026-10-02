@@ -2,7 +2,7 @@ import { dropCursor } from "prosemirror-dropcursor";
 import { gapCursor } from "prosemirror-gapcursor";
 import { history, redo, undo } from "prosemirror-history";
 import { DOMSerializer, Slice, type Node, type Schema } from "prosemirror-model";
-import { EditorState, Plugin, PluginKey, TextSelection, type Transaction } from "prosemirror-state";
+import { EditorState, NodeSelection, Plugin, PluginKey, TextSelection, type Transaction } from "prosemirror-state";
 import { Decoration, DecorationSet, EditorView } from "prosemirror-view";
 import { createMarkdownParser, serializeMarkdown } from "../markdown";
 import { createSchema, headingLevelsOf, type HeadingLevel } from "../schema";
@@ -324,6 +324,11 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
    * side by side with it (on the left when dropped left of its centre).
    * Anywhere else, ProseMirror's own drop handling moves them above or below.
    */
+  // ProseMirror clears view.dragging before handleDrop runs, so what was being
+  // dragged (a node selection, when a node was dragged without being selected
+  // first) is captured from the DOM drop event, which runs just before.
+  let dragged: { node?: NodeSelection; move: boolean } | null = null;
+
   const stackDrop = (view: EditorView, event: DragEvent, slice: Slice, moved: boolean): boolean => {
     const dropped = imagesOf(slice);
     if (!dropped) return false;
@@ -336,11 +341,19 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     if (!rect) return false;
     if (event.clientY < rect.top + rect.height / 3 || event.clientY > rect.top + (rect.height * 2) / 3) return false;
     event.preventDefault();
-    return stackOntoImage(target, dropped, event.clientX < rect.left + rect.width / 2, moved)(view.state, view.dispatch);
+    const from: boolean | NodeSelection = moved && dragged?.node ? dragged.node : moved;
+    return stackOntoImage(target, dropped, event.clientX < rect.left + rect.width / 2, from)(view.state, view.dispatch);
   };
 
   const mediaDropPlugin = new Plugin({
     props: {
+      handleDOMEvents: {
+        drop: (view) => {
+          const d = view.dragging as { node?: NodeSelection; move: boolean } | null;
+          dragged = d ? { node: d.node, move: d.move } : null;
+          return false;
+        },
+      },
       handlePaste: (v, event) => uploadFiles(v, Array.from(event.clipboardData?.files ?? [])),
       handleDrop: (v, event, slice, moved) => {
         const files = Array.from(event.dataTransfer?.files ?? []);

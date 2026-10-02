@@ -417,22 +417,28 @@ export function imagesOf(slice: Slice): Node[] | null {
 /**
  * Drop images onto a lone image to put them side by side with it. `target` is
  * the position of a top-level image node; `before` puts the dropped images on
- * its left. With `moved`, the dragged nodes are deleted from where they were.
+ * its left. `moved` is where the dragged content came from, to be deleted: a
+ * node selection for a dragged node (which need not be the editor's current
+ * selection), `true` for the current selection, or `false` for a copy.
  */
-export function stackOntoImage(target: number, images: Node[], before: boolean, moved: boolean): Command {
+export function stackOntoImage(target: number, images: Node[], before: boolean, moved: boolean | NodeSelection): Command {
   return (state, dispatch) => {
     const { image, photo_row } = state.schema.nodes;
     if (!photo_row) return false;
     const existing = state.doc.nodeAt(target);
     if (!existing || existing.type !== image || state.doc.resolve(target).depth !== 0) return false;
     const tr = state.tr;
-    if (moved) tr.deleteSelection();
+    if (moved instanceof NodeSelection) moved.replace(tr);
+    else if (moved) tr.deleteSelection();
     const pos = tr.mapping.map(target);
     const still = tr.doc.nodeAt(pos);
     if (!still || still.type !== image) return false;
     const children = before ? [...images, still] : [still, ...images];
-    tr.replaceWith(pos, pos + still.nodeSize, photo_row.create(null, children));
-    dispatch?.(tr.scrollIntoView());
+    const row = photo_row.create(null, children);
+    tr.replaceWith(pos, pos + still.nodeSize, row);
+    // Leave the view where it is: the drop happened in sight. Select the row.
+    tr.setSelection(NodeSelection.create(tr.doc, pos));
+    dispatch?.(tr);
     return true;
   };
 }
