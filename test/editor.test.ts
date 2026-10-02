@@ -844,6 +844,17 @@ describe("media hooks", () => {
     expect(editor.getMarkdown()).toBe("![new](/new.png)");
   });
 
+  it("double-clicking updates the clicked node even when the click position is its end", async () => {
+    const pickImage = vi.fn(async () => ({ src: "/new.png" }));
+    mount("![a](/a.png)\n\n![b](/b.png)", { pickImage });
+    const { view } = editor;
+    const first = view.state.doc.firstChild!;
+    // pos = 1 is the end of the first image, i.e. the start of the second block.
+    view.someProp("handleDoubleClickOn", (f) => f(view, 1, first, 0, new MouseEvent("dblclick"), true));
+    await flush();
+    expect(editor.getMarkdown()).toBe("![a](/new.png)\n\n![b](/b.png)");
+  });
+
   it("uploadFile handles pasted files in order and skips non-media and nulls", async () => {
     const uploadFile = vi.fn(async (file: File) =>
       file.name === "skip.png" ? null : { kind: file.type.startsWith("video") ? "video" : "image", src: "/up/" + file.name } as const,

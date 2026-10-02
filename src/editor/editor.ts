@@ -315,13 +315,15 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
       const at = v.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
       return uploadFiles(v, files, at);
     },
-    handleDoubleClickOn: (v, pos, node) => {
+    // nodePos, not pos: the click position inside an atom can be its end,
+    // which is the start of the next block, and the update would land there.
+    handleDoubleClickOn: (v, _pos, node, nodePos) => {
       if (images && node.type === schema.nodes.image) {
-        openImagePopover(v, { pos, src: node.attrs.src, alt: node.attrs.alt, caption: node.attrs.caption, link: node.attrs.link });
+        openImagePopover(v, { pos: nodePos, src: node.attrs.src, alt: node.attrs.alt, caption: node.attrs.caption, link: node.attrs.link });
         return true;
       }
       if (videos && node.type === schema.nodes.video) {
-        openVideoPopover(v, { pos, src: node.attrs.src, poster: node.attrs.poster, caption: node.attrs.caption });
+        openVideoPopover(v, { pos: nodePos, src: node.attrs.src, poster: node.attrs.poster, caption: node.attrs.caption });
         return true;
       }
       return false;
