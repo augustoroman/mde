@@ -9,12 +9,12 @@ export { createSchema, schema, clampHeadingLevel, headingLevelsOf, optionsOf, DE
 export type { HeadingLevel, SchemaOptions } from "./schema";
 export { createMarkdownParser, parseMarkdown, markdownSerializer, serializeMarkdown, VIDEO_LINE_RE } from "./markdown";
 export type { ImageAttrs, VideoAttrs } from "./editor/commands";
+export { dropImages, draggedImages, imageAt, zoneAt } from "./editor/drop";
+export type { DropZone, DraggedImages } from "./editor/drop";
 export {
   insertImage,
   insertImageRow,
   insertVideo,
-  imagesOf,
-  stackOntoImage,
   setLink,
   removeLink,
   toggleList,

@@ -9,7 +9,6 @@ import { createSchema, headingLevelsOf, type HeadingLevel } from "../schema";
 import {
   blockActive,
   currentLinkHref,
-  imagesOf,
   insertImage,
   insertImageRow,
   insertVideo,
@@ -19,11 +18,11 @@ import {
   setHeading,
   setLink,
   setParagraph,
-  stackOntoImage,
   toggleList,
   toggleMarkOnWord,
 } from "./commands";
 import { canonicalDocPlugin } from "./canonical";
+import { draggedImages, dropImages, imageAt, zoneAt } from "./drop";
 import { icons } from "./icons";
 import { buildInputRules } from "./inputrules";
 import { buildKeymap } from "./keymap";
@@ -142,21 +141,6 @@ export interface MarkdownEditor {
 }
 
 const placeholderKey = new PluginKey("mde-placeholder");
-
-/** The position of the top-level image node at or around pos, if any. */
-function targetImage(doc: Node, pos: number): number | null {
-  const image = doc.type.schema.nodes.image;
-  if (!image) return null;
-  const $pos = doc.resolve(Math.max(0, Math.min(pos, doc.content.size)));
-  const candidates = [$pos.nodeAfter, $pos.nodeBefore];
-  const positions = [$pos.pos, $pos.nodeBefore ? $pos.pos - $pos.nodeBefore.nodeSize : -1];
-  for (let i = 0; i < 2; i++) {
-    const node = candidates[i];
-    if (node && node.type === image && $pos.depth === 0) return positions[i];
-  }
-  if ($pos.depth === 1 && $pos.parent.type === image) return $pos.before(1);
-  return null;
-}
 
 function placeholderPlugin(text: string): Plugin {
   return new Plugin({
@@ -319,30 +303,32 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     return true;
   };
 
-  /**
-   * Dropping dragged images onto the middle third of a lone image puts them
-   * side by side with it (on the left when dropped left of its centre).
-   * Anywhere else, ProseMirror's own drop handling moves them above or below.
-   */
   // ProseMirror clears view.dragging before handleDrop runs, so what was being
   // dragged (a node selection, when a node was dragged without being selected
   // first) is captured from the DOM drop event, which runs just before.
   let dragged: { node?: NodeSelection; move: boolean } | null = null;
 
-  const stackDrop = (view: EditorView, event: DragEvent, slice: Slice, moved: boolean): boolean => {
-    const dropped = imagesOf(slice);
+  /**
+   * Images dropped on an image: into a row to its left or right, between
+   * blocks above or below it, or onto its middle third to make a row of the
+   * two. Anything else is left to ProseMirror's own drop handling.
+   */
+  const imageDrop = (view: EditorView, event: DragEvent, slice: Slice, moved: boolean): boolean => {
+    const dropped = draggedImages(slice, schema);
     if (!dropped) return false;
     const at = view.posAtCoords({ left: event.clientX, top: event.clientY });
     if (!at) return false;
-    const target = targetImage(view.state.doc, at.inside >= 0 ? at.inside : at.pos);
+    const target = imageAt(view.state.doc, at.inside >= 0 ? at.inside : at.pos);
     if (target == null) return false;
     const dom = view.nodeDOM(target) as HTMLElement | null;
     const rect = dom?.querySelector("img")?.getBoundingClientRect() ?? dom?.getBoundingClientRect();
     if (!rect) return false;
-    if (event.clientY < rect.top + rect.height / 3 || event.clientY > rect.top + (rect.height * 2) / 3) return false;
-    event.preventDefault();
+    const inRow = view.state.doc.resolve(target).depth === 1;
+    const zone = zoneAt(rect, event.clientX, event.clientY, inRow);
     const from: boolean | NodeSelection = moved && dragged?.node ? dragged.node : moved;
-    return stackOntoImage(target, dropped, event.clientX < rect.left + rect.width / 2, from)(view.state, view.dispatch);
+    if (!dropImages(target, dropped, zone, from)(view.state, view.dispatch)) return false;
+    event.preventDefault();
+    return true;
   };
 
   const mediaDropPlugin = new Plugin({
@@ -361,7 +347,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
           const at = v.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
           return uploadFiles(v, files, at);
         }
-        return stackDrop(v, event, slice, moved);
+        return imageDrop(v, event, slice, moved);
       },
     },
   });
