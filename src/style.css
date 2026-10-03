@@ -272,12 +272,19 @@
   opacity: 0.75;
   text-align: center;
 }
-/* Images on one line sit side by side, sharing the width. */
-.mde-content .mde-row {
+/* Images on one line sit side by side, sharing the width, under one caption. */
+.mde-content figure.mde-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+}
+.mde-content .mde-row-items {
   display: flex;
   justify-content: center;
   align-items: flex-start;
   gap: 8px;
+  width: 100%;
 }
 .mde-content .mde-row figure.mde-image {
   flex: 0 1 auto;

@@ -26,7 +26,7 @@ describe("canonical documents round-trip unchanged", () => {
     '![Alt](https://x.test/a.jpg "A caption")',
     '[![](https://x.test/t.jpg "Sized to fit")](https://x.test/full.jpg)',
     "![a](https://x.test/a.jpg) ![b](https://x.test/b.jpg)",
-    '[![](https://x.test/a.jpg)](https://x.test/A.jpg) [![](https://x.test/b.jpg "Right")](https://x.test/B.jpg)',
+    '[![](https://x.test/a.jpg "Both of them")](https://x.test/A.jpg) [![](https://x.test/b.jpg)](https://x.test/B.jpg)',
     '<video src="https://x.test/v.webm" poster="https://x.test/v.webp" controls></video>',
     '<figure>\n<video src="https://x.test/v.webm" controls></video>\n<figcaption>Clapping, at last</figcaption>\n</figure>',
     "# Heading\n\nParagraph one.\n\nParagraph two.\n\n- list\n\n![](https://x.test/i.jpg)\n\nAfter.",
@@ -267,6 +267,13 @@ describe("captions, links and photo rows", () => {
     expect(shape("![](/a.jpg) ![](/b.jpg) ![](/c.jpg)")).toBe("doc(photo_row(image, image, image))");
     expect(attrs("![](/a.jpg) ![](/b.jpg) ![](/c.jpg)", 2).src).toBe("/c.jpg");
     expect(shape("![](/a.jpg)")).toBe("doc(image)");
+  });
+
+  it("a row has one caption: the first title among its images, written on the first", () => {
+    expect(roundTrip('![](/a.jpg "Both of us") ![](/b.jpg)')).toBe('![](/a.jpg "Both of us") ![](/b.jpg)');
+    expect(roundTrip('![](/a.jpg) ![](/b.jpg "Later")')).toBe('![](/a.jpg "Later") ![](/b.jpg)');
+    expect(attrs('![](/a.jpg "Both") ![](/b.jpg "Dropped")')).toEqual({ caption: "Both" });
+    expect(attrs('![](/a.jpg "Both") ![](/b.jpg "Dropped")', 1).caption).toBe("");
   });
 
   it("text between images breaks the row into blocks", () => {

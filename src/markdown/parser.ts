@@ -31,7 +31,7 @@ export function createMarkdownParser(schema: Schema = defaultSchema): MarkdownPa
               link: String(tok.attrGet("link") ?? ""),
             }),
           },
-          photo_row: { block: "photo_row" },
+          photo_row: { block: "photo_row", getAttrs: (tok) => ({ caption: String(tok.attrGet("caption") ?? "") }) },
         }
       : {}),
     ...(videos

@@ -1,6 +1,6 @@
 {
   "name": "mde",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A constrained, allow-listed WYSIWYG markdown editor built on ProseMirror.",
   "type": "module",
   "main": "./dist/mde.js",

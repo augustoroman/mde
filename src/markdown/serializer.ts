@@ -53,7 +53,7 @@ export const markdownSerializer = new MarkdownSerializer(
     },
     photo_row(state, node) {
       const parts: string[] = [];
-      node.forEach((image) => parts.push(imageMarkdown(state, image)));
+      node.forEach((image, _offset, index) => parts.push(imageMarkdown(state, image, index === 0 ? node.attrs.caption : "")));
       state.write(parts.join(" "));
       state.closeBlock(node);
     },
@@ -97,9 +97,9 @@ export const markdownSerializer = new MarkdownSerializer(
   { strict: true },
 );
 
-/** `[![alt](src "caption")](link)`, with the link and caption only when set. */
-function imageMarkdown(state: MarkdownSerializerState, node: Node): string {
-  const title = node.attrs.caption ? ` "${String(node.attrs.caption).replace(/"/g, '\\"')}"` : "";
+/** `[![alt](src "caption")](link)`, with the link and caption only when set. Inside a row the caption is the row's. */
+function imageMarkdown(state: MarkdownSerializerState, node: Node, caption: string = node.attrs.caption): string {
+  const title = caption ? ` "${String(caption).replace(/"/g, '\\"')}"` : "";
   const image = `![${state.esc(node.attrs.alt || "")}](${escapeUrl(node.attrs.src)}${title})`;
   return node.attrs.link ? `[${image}](${escapeUrl(node.attrs.link)})` : image;
 }

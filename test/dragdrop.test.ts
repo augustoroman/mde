@@ -197,6 +197,17 @@ describe("dropping a whole row", () => {
   }
 });
 
+describe("captions travel with rows", () => {
+  it("stacking onto a captioned image makes a row with that caption", () => {
+    editor.setMarkdown('![](/A.png "Us")\n\n![](/B.png "Mine")');
+    const { view } = editor;
+    const b = view.state.doc.child(1);
+    const ok = dropImages(0, { images: [b], row: false }, "stack-right", NodeSelection.create(view.state.doc, 1))(view.state, view.dispatch);
+    expect(ok).toBe(true);
+    expect(editor.getMarkdown()).toBe('![](/A.png "Us") ![](/B.png)');
+  });
+});
+
 describe("zones from pointer position", () => {
   const rect = { left: 100, top: 200, width: 300, height: 90 };
   it("a loose image splits into thirds, the middle one left/right", () => {

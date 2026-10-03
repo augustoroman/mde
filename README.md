@@ -173,7 +173,9 @@ A paragraph with **strong**, *emphasis* and a [link](https://example.com).
   image's click-through (`link`), typically the full-size original. Both are optional attributes of
   the image node.
 - Two or more images on one line, and nothing else, are a `photo_row`: the editor shows them side
-  by side. Text between images splits them into separate blocks. Dragging an image onto another
+  by side under one shared caption, written as the title of the row's first image (titles on the
+  others are dropped). Editing any image in the row edits that caption. Text between images splits
+  them into separate blocks. Dragging an image onto another
   puts it above or below (top or bottom third), beside it in a row (middle third, left or right
   of centre), or into a row at that slot (left or right half of an image in a row). The document
   logic is `dropImages`, exported, and `test/dragdrop.test.ts` runs every combination of document

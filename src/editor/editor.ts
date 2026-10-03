@@ -53,12 +53,14 @@ export interface LinkChoice {
   href: string;
   text?: string;
 }
-/** An existing image, as handed to `pickImage`. */
+/** An existing image, as handed to `pickImage`. In a row, `caption` is the row's shared caption. */
 export interface ImageState {
   src: string;
   alt: string;
   caption: string;
   link: string;
+  /** The image sits in a side-by-side row, whose one caption this is. */
+  inRow?: boolean;
 }
 /** An existing video, as handed to `pickVideo`. */
 export interface VideoState {
@@ -134,7 +136,7 @@ export interface MarkdownEditor {
   setMode(mode: EditorMode): void;
   insertImage(src: string, alt?: string | ImageChoice): void;
   /** Two or more images side by side (one inserts normally). */
-  insertImageRow(images: ImageChoice[]): void;
+  insertImageRow(images: ImageChoice[], caption?: string): void;
   insertVideo(src: string, attrs?: { poster?: string; caption?: string }): void;
   focus(): void;
   destroy(): void;
@@ -224,7 +226,16 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
       link: choice.link ?? edit?.link ?? "",
     };
     if (edit && view.state.doc.nodeAt(edit.pos)?.type === schema.nodes.image) {
-      view.dispatch(view.state.tr.setNodeMarkup(edit.pos, undefined, attrs));
+      const $pos = view.state.doc.resolve(edit.pos);
+      const tr = view.state.tr;
+      if ($pos.depth === 1 && $pos.parent.type === schema.nodes.photo_row) {
+        // The caption belongs to the row; the image keeps none of its own.
+        tr.setNodeMarkup($pos.before(1), undefined, { ...$pos.parent.attrs, caption: attrs.caption });
+        tr.setNodeMarkup(edit.pos, undefined, { ...attrs, caption: "" });
+      } else {
+        tr.setNodeMarkup(edit.pos, undefined, attrs);
+      }
+      view.dispatch(tr);
     } else {
       insertImage(schema, attrs.src, attrs)(view.state, view.dispatch);
     }
@@ -243,7 +254,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
 
   const openImagePopover = (view: EditorView, edit?: { pos: number } & ImageState) => {
     if (options.pickImage) {
-      void options.pickImage(edit ? { src: edit.src, alt: edit.alt, caption: edit.caption, link: edit.link } : null).then((choice) => {
+      void options.pickImage(edit ? { src: edit.src, alt: edit.alt, caption: edit.caption, link: edit.link, inRow: edit.inRow } : null).then((choice) => {
         if (!destroyed && choice?.src) applyImage(view, choice, edit);
       });
       return;
@@ -253,7 +264,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
       fields: [
         { name: "src", label: "Image URL", value: edit?.src ?? "", placeholder: "https://", type: "url", required: true },
         { name: "alt", label: "Alt text", value: edit?.alt ?? "", placeholder: "Describe the image" },
-        { name: "caption", label: "Caption", value: edit?.caption ?? "", placeholder: "Shown under the image" },
+        { name: "caption", label: edit?.inRow ? "Caption for the row" : "Caption", value: edit?.caption ?? "", placeholder: edit?.inRow ? "Shown under the row" : "Shown under the image" },
       ],
       submitLabel: edit ? "Update" : "Insert",
       onSubmit: ({ src, alt, caption }) => {
@@ -373,7 +384,12 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     // which is the start of the next block, and the update would land there.
     handleDoubleClickOn: (v, _pos, node, nodePos) => {
       if (images && node.type === schema.nodes.image) {
-        openImagePopover(v, { pos: nodePos, src: node.attrs.src, alt: node.attrs.alt, caption: node.attrs.caption, link: node.attrs.link });
+        const $pos = v.state.doc.resolve(nodePos);
+        const row = $pos.depth === 1 && $pos.parent.type === schema.nodes.photo_row ? $pos.parent : null;
+        openImagePopover(v, {
+          pos: nodePos, src: node.attrs.src, alt: node.attrs.alt, link: node.attrs.link,
+          caption: row ? row.attrs.caption : node.attrs.caption, inRow: !!row,
+        });
         return true;
       }
       if (videos && node.type === schema.nodes.video) {
@@ -529,10 +545,10 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
       if (mode !== "rich") setMode("rich");
       insertImage(schema, src, alt)(view.state, view.dispatch);
     },
-    insertImageRow(list) {
+    insertImageRow(list, caption = "") {
       if (!images) return;
       if (mode !== "rich") setMode("rich");
-      insertImageRow(schema, list)(view.state, view.dispatch);
+      insertImageRow(schema, list, caption)(view.state, view.dispatch);
     },
     insertVideo(src, attrs = {}) {
       if (!videos) return;

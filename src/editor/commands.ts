@@ -310,14 +310,14 @@ export function insertImage(schema: Schema, src: string, alt: string | ImageAttr
   return type ? insertBlockLeaf(type.create({ src, alt: attrs.alt ?? "", caption: attrs.caption ?? "", link: attrs.link ?? "" })) : () => false;
 }
 
-/** Insert two or more images side by side; one image inserts normally. */
-export function insertImageRow(schema: Schema, images: Array<{ src: string } & ImageAttrs>): Command {
+/** Insert two or more images side by side with one shared caption; one image inserts normally. */
+export function insertImageRow(schema: Schema, images: Array<{ src: string } & ImageAttrs>, caption = ""): Command {
   const type = schema.nodes.image;
   const row = schema.nodes.photo_row;
   if (!type || !images.length) return () => false;
-  if (images.length === 1) return insertImage(schema, images[0].src, images[0]);
-  const nodes = images.map((i) => type.create({ src: i.src, alt: i.alt ?? "", caption: i.caption ?? "", link: i.link ?? "" }));
-  return insertBlockLeaf(row.create(null, nodes));
+  if (images.length === 1) return insertImage(schema, images[0].src, { ...images[0], caption: images[0].caption || caption });
+  const nodes = images.map((i) => type.create({ src: i.src, alt: i.alt ?? "", caption: "", link: i.link ?? "" }));
+  return insertBlockLeaf(row.create({ caption }, nodes));
 }
 
 /** Insert a video; a no-op command when the schema was created without videos. */

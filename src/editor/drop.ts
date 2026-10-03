@@ -79,7 +79,8 @@ export function dropImages(target: number, dragged: DraggedImages, zone: DropZon
     if (!still || still.type !== image) return false;
     const $pos = tr.doc.resolve(pos);
     const inRow = $pos.depth === 1 && $pos.parent.type === photo_row;
-    const images = dragged.images.map((n) => image.create(n.attrs));
+    // Images in a row carry no caption of their own; the row has one.
+    const images = dragged.images.map((n) => image.create({ ...n.attrs, caption: "" }));
     let selectAt: number;
     if (inRow) {
       // Inside a row every zone is a slot: before or after this image.
@@ -92,8 +93,9 @@ export function dropImages(target: number, dragged: DraggedImages, zone: DropZon
       tr.insert(at, block);
       selectAt = at;
     } else {
-      const children = zone === "stack-left" ? [...images, still] : [still, ...images];
-      tr.replaceWith(pos, pos + still.nodeSize, photo_row.create(null, children));
+      const bare = image.create({ ...still.attrs, caption: "" });
+      const children = zone === "stack-left" ? [...images, bare] : [bare, ...images];
+      tr.replaceWith(pos, pos + still.nodeSize, photo_row.create({ caption: still.attrs.caption }, children));
       selectAt = pos;
     }
     tr.setSelection(NodeSelection.create(tr.doc, selectAt));

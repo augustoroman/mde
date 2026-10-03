@@ -35,7 +35,7 @@ export function clampHeadingLevel(level: number, allowed: readonly HeadingLevel[
  *
  *   doc          := block+
  *   block        := paragraph | heading | bullet_list | ordered_list | image? | photo_row? | video? | html_block?
- *   photo_row    := image+   (one image is unwrapped to a plain image)
+ *   photo_row    := image+   (one image is unwrapped to a plain image; a row has one shared caption)
  *   list_item    := paragraph (paragraph | bullet_list | ordered_list)*
  *   inline marks := strong | em | link
  *
@@ -144,12 +144,17 @@ export function createSchema(options: SchemaOptions = {}): Schema {
     // Two or more images on one markdown line sit side by side. The content
     // rule allows one so that dragging an image out never makes ProseMirror
     // fill the row with an empty image; the canonical plugin then unwraps it.
+    // A row has one shared caption (markdown: the title of its first image).
     nodes.photo_row = {
       group: "block",
       content: "image+",
       defining: true,
-      parseDOM: [{ tag: "div.mde-row" }],
-      toDOM: () => ["div", { class: "mde-row" }, 0],
+      attrs: { caption: { default: "", validate: "string" } },
+      parseDOM: [{ tag: "figure.mde-row", getAttrs: (dom) => ({ caption: dom.getAttribute("data-caption") ?? "" }) }],
+      toDOM: (node) =>
+        node.attrs.caption
+          ? ["figure", { class: "mde-row", "data-caption": node.attrs.caption }, ["div", { class: "mde-row-items" }, 0], ["figcaption", node.attrs.caption]]
+          : ["figure", { class: "mde-row" }, ["div", { class: "mde-row-items" }, 0]],
     };
   }
 

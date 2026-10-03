@@ -40,7 +40,11 @@ function unwrapSingleRows(tr: Transaction): void {
   if (!row) return;
   const spots: Array<{ from: number; to: number; node: Node }> = [];
   tr.doc.forEach((node, pos) => {
-    if (node.type === row && node.childCount === 1) spots.push({ from: pos, to: pos + node.nodeSize, node: node.firstChild! });
+    if (node.type === row && node.childCount === 1) {
+      const image = node.firstChild!;
+      const caption = node.attrs.caption || image.attrs.caption;
+      spots.push({ from: pos, to: pos + node.nodeSize, node: image.type.create({ ...image.attrs, caption }) });
+    }
   });
   for (const { from, to, node } of spots.reverse()) tr.replaceWith(from, to, node);
 }

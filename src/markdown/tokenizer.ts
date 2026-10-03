@@ -327,10 +327,14 @@ function splitParagraph(state: StateCore, paragraph: TokenTree, imagesAsLinks: b
   }
   flushRun();
 
-  // Only images, two or more: they sit side by side.
+  // Only images, two or more: they sit side by side, with one shared caption
+  // (the first title among them; markdown has no caption for a group).
   if (out.length >= 2 && out.every((n) => n.open.type === "image_block")) {
-    const open = makeToken(state, "photo_row_open", "div", 1);
-    const close = makeToken(state, "photo_row_close", "div", -1);
+    const open = makeToken(state, "photo_row_open", "figure", 1);
+    const close = makeToken(state, "photo_row_close", "figure", -1);
+    const caption = out.map((n) => String(n.open.attrGet("caption") ?? "")).find((c) => c) ?? "";
+    for (const n of out) n.open.attrSet("caption", "");
+    open.attrSet("caption", caption);
     return [{ open, close, children: out }];
   }
   return out;

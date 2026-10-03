@@ -850,7 +850,7 @@ describe("media hooks", () => {
     mount("![old](/old.png)", { pickImage });
     const { view } = editor;
     view.someProp("handleDoubleClickOn", (f) => f(view, 0, view.state.doc.firstChild!, 0, new MouseEvent("dblclick"), true));
-    expect(pickImage).toHaveBeenCalledWith({ src: "/old.png", alt: "old", caption: "", link: "" });
+    expect(pickImage).toHaveBeenCalledWith({ src: "/old.png", alt: "old", caption: "", link: "", inRow: false });
     await flush();
     expect(editor.getMarkdown()).toBe("![new](/new.png)");
   });
@@ -873,6 +873,24 @@ describe("media hooks", () => {
     view.dispatch(view.state.tr.delete(2, 3));
     expect(editor.getMarkdown()).toBe("![a](/a.png)\n\nafter");
     expect(editor.getMarkdown()).not.toContain("![](");
+  });
+
+  it("editing any image in a row edits the row's caption", async () => {
+    const pickImage = vi.fn(async (cur: { src: string; caption: string; inRow?: boolean } | null) => ({ src: cur!.src, caption: "Shared" }));
+    mount('![](/a.png "Old") ![](/b.png)', { pickImage });
+    const { view } = editor;
+    // double-click the second image (row at 0, images at 1 and 2)
+    view.someProp("handleDoubleClickOn", (f) => f(view, 2, view.state.doc.firstChild!.child(1), 2, new MouseEvent("dblclick"), true));
+    expect(pickImage).toHaveBeenCalledWith({ src: "/b.png", alt: "", caption: "Old", link: "", inRow: true });
+    await flush();
+    expect(editor.getMarkdown()).toBe('![](/a.png "Shared") ![](/b.png)');
+  });
+
+  it("a row left with one image keeps the caption on that image", () => {
+    mount('![](/a.png "Keep") ![](/b.png)');
+    const { view } = editor;
+    view.dispatch(view.state.tr.delete(2, 3));
+    expect(editor.getMarkdown()).toBe('![](/a.png "Keep")');
   });
 
   it("uploadFile handles pasted files in order and skips non-media and nulls", async () => {
